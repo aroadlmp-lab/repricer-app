@@ -1,0 +1,101 @@
+from typing import Optional
+from datetime import datetime, timezone
+from extensions import db, decrypt_value
+from models import Marketplace, Oferta, HistoricoPrecios, Ejecucion
+from clients.mirakl import MiraklClient
+
+
+def get_client(marketplace: Marketplace) -> MiraklClient:
+    api_key = None
+    if marketplace.api_key_encrypted:
+        try:
+            api_key = decrypt_value(marketplace.api_key_encrypted)
+        except Exception:
+            pass
+    return MiraklClient(marketplace.url_api, api_key, marketplace.shop_id)
+
+
+def run_repricer(app=None):
+    if app:
+        ctx = app.app_context()
+        ctx.push()
+    try:
+        _execute_repricer()
+    finally:
+        if app:
+            ctx.pop()
+
+
+def _execute_repricer():
+    marketplaces = Marketplace.query.filter_by(activo=True).all()
+
+    for mp in marketplaces:
+        cambios = 0
+        procesadas = 0
+        errores_list = []
+
+        try:
+            client = get_client(mp)
+            ofertas = Oferta.query.filter_by(marketplace_id=mp.id, activo=True).filter(Oferta.stock > 0).all()
+
+            for oferta in ofertas:
+                procesadas += 1
+                try:
+                    offer_id = oferta.offer_id_externo or str(oferta.id)
+                    bb_info = client.get_buybox_info(offer_id)
+                    nuevo_precio = _calcular_precio(oferta, bb_info)
+
+                    if nuevo_precio and nuevo_precio != oferta.precio_actual:
+                        success = client.update_price(offer_id, nuevo_precio)
+                        if success:
+                            motivo = 'Bajar para ganar buybox' if nuevo_precio < oferta.precio_actual else 'Subir manteniendo buybox'
+                            hist = HistoricoPrecios(
+                                oferta_id=oferta.id,
+                                precio_anterior=oferta.precio_actual,
+                                precio_nuevo=nuevo_precio,
+                                motivo=motivo,
+                                tenia_buybox=bb_info['has_buybox'],
+                            )
+                            db.session.add(hist)
+                            oferta.precio_actual = nuevo_precio
+                            oferta.tiene_buybox = bb_info['has_buybox']
+                            cambios += 1
+                except Exception as e:
+                    errores_list.append(f'Oferta {oferta.id}: {str(e)}')
+
+            db.session.add(Ejecucion(
+                marketplace_id=mp.id,
+                estado='error' if errores_list else 'ok',
+                ofertas_procesadas=procesadas,
+                cambios_realizados=cambios,
+                errores='; '.join(errores_list) if errores_list else None,
+            ))
+            db.session.commit()
+
+        except Exception as e:
+            db.session.rollback()
+            db.session.add(Ejecucion(
+                marketplace_id=mp.id,
+                estado='error',
+                ofertas_procesadas=procesadas,
+                cambios_realizados=cambios,
+                errores=str(e),
+            ))
+            db.session.commit()
+
+
+def _calcular_precio(oferta: Oferta, bb_info: dict) -> Optional[float]:
+    precio = oferta.precio_actual
+    precio_min = oferta.precio_min or 0
+    precio_max = oferta.precio_max or float('inf')
+
+    if not bb_info['has_buybox']:
+        nuevo = round(precio - 0.01, 2)
+        if nuevo >= precio_min:
+            return nuevo
+        return None
+    else:
+        nuevo = round(precio + 0.01, 2)
+        if nuevo <= precio_max:
+            return nuevo
+        return None
