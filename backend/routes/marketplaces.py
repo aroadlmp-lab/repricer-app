@@ -61,15 +61,22 @@ def test_conexion(id):
 
 @bp.route('/<int:id>/raw', methods=['GET'])
 def raw_offers(id):
-    """Debug: ver datos raw de la primera oferta de la API."""
+    """Debug: ver datos raw de la API."""
     import requests as req
     mp = Marketplace.query.get_or_404(id)
     client = get_client(mp)
     if client.mock_mode:
         return jsonify({'error': 'mock mode'})
+
+    endpoint = request.args.get('endpoint', 'offers')
     try:
-        r = req.get(f'{client.url_api}/api/offers', headers=client._headers(),
-                    params={'max': 2}, timeout=15)
+        if endpoint == 'p11':
+            product_id = request.args.get('product_id', '')
+            r = req.get(f'{client.url_api}/api/products/offers', headers=client._headers(),
+                        params={'product_ids': product_id}, timeout=15)
+        else:
+            r = req.get(f'{client.url_api}/api/offers', headers=client._headers(),
+                        params={'max': 2}, timeout=15)
         r.raise_for_status()
         return jsonify(r.json())
     except Exception as e:
