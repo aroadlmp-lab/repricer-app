@@ -38,9 +38,19 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        _add_missing_columns()
         _seed_if_empty()
 
     return app
+
+
+def _add_missing_columns():
+    from sqlalchemy import inspect, text
+    inspector = inspect(db.engine)
+    columns = [c['name'] for c in inspector.get_columns('ofertas')]
+    if 'product_sku' not in columns:
+        db.session.execute(text('ALTER TABLE ofertas ADD COLUMN product_sku VARCHAR(100)'))
+        db.session.commit()
 
 
 def _seed_if_empty():
