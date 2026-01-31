@@ -59,6 +59,7 @@ class Oferta(db.Model):
     marketplace_id = db.Column(db.Integer, db.ForeignKey('marketplaces.id'), nullable=False)
     producto_id = db.Column(db.Integer, db.ForeignKey('productos.id'), nullable=False)
     offer_id_externo = db.Column(db.String(100), nullable=True)
+    product_sku = db.Column(db.String(100), nullable=True)
     precio_actual = db.Column(db.Float, nullable=False)
     precio_min = db.Column(db.Float, nullable=True)
     precio_max = db.Column(db.Float, nullable=True)
@@ -77,6 +78,7 @@ class Oferta(db.Model):
             'marketplace_id': self.marketplace_id,
             'producto_id': self.producto_id,
             'offer_id_externo': self.offer_id_externo,
+            'product_sku': self.product_sku,
             'precio_actual': self.precio_actual,
             'precio_min': self.precio_min,
             'precio_max': self.precio_max,

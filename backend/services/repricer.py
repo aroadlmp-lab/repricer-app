@@ -42,13 +42,23 @@ def _execute_repricer():
                 procesadas += 1
                 try:
                     offer_id = oferta.offer_id_externo or str(oferta.id)
-                    bb_info = client.get_buybox_info(offer_id)
+                    product_sku = oferta.product_sku or ''
+                    bb_info = client.get_buybox_info(offer_id, product_sku)
+
+                    if bb_info.get('error'):
+                        errores_list.append(f'Oferta {oferta.id}: buybox error: {bb_info["error"]}')
+                        continue
+
+                    if bb_info.get('competitors', 0) == 0:
+                        # No hay competidores o no se pudo obtener info
+                        continue
+
                     nuevo_precio = _calcular_precio(oferta, bb_info)
 
                     if nuevo_precio and nuevo_precio != oferta.precio_actual:
                         success = client.update_price(offer_id, nuevo_precio)
                         if success:
-                            motivo = 'Bajar para ganar buybox' if nuevo_precio < oferta.precio_actual else 'Subir manteniendo buybox'
+                            motivo = _generar_motivo(oferta, bb_info, nuevo_precio)
                             hist = HistoricoPrecios(
                                 oferta_id=oferta.id,
                                 precio_anterior=oferta.precio_actual,
@@ -84,17 +94,31 @@ def _execute_repricer():
             db.session.commit()
 
 
+def _generar_motivo(oferta, bb_info, nuevo_precio):
+    best = bb_info.get('best_price', 0)
+    if nuevo_precio < oferta.precio_actual:
+        return f'Bajar para ganar posicion (mejor precio competidor: {best})'
+    else:
+        return f'Subir manteniendo mejor posicion (mejor precio competidor: {best})'
+
+
 def _calcular_precio(oferta: Oferta, bb_info: dict) -> Optional[float]:
     precio = oferta.precio_actual
     precio_min = oferta.precio_min or 0
     precio_max = oferta.precio_max or float('inf')
+    best_price = bb_info.get('best_price', 0)
 
     if not bb_info['has_buybox']:
-        nuevo = round(precio - 0.01, 2)
+        # No tenemos la mejor posicion: bajar 0.01 por debajo del mejor precio
+        if best_price > 0:
+            nuevo = round(best_price - 0.01, 2)
+        else:
+            nuevo = round(precio - 0.01, 2)
         if nuevo >= precio_min:
             return nuevo
         return None
     else:
+        # Tenemos la mejor posicion: intentar subir 0.01
         nuevo = round(precio + 0.01, 2)
         if nuevo <= precio_max:
             return nuevo

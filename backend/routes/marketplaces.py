@@ -93,18 +93,20 @@ def sincronizar(id):
         if oferta:
             oferta.precio_actual = o['price']
             oferta.stock = o['stock']
+            oferta.product_sku = o.get('product_sku', '')
             actualizadas += 1
         else:
             oferta = Oferta(
                 marketplace_id=mp.id,
                 producto_id=producto.id,
                 offer_id_externo=o['offer_id'],
+                product_sku=o.get('product_sku', ''),
                 precio_actual=o['price'],
                 precio_min=round(o['price'] * 0.90, 2),
                 precio_max=round(o['price'] * 1.10, 2),
                 stock=o['stock'],
                 tiene_buybox=False,
-                activo=False,  # Inactivo por defecto, el usuario activa manualmente
+                activo=False,
             )
             db.session.add(oferta)
             nuevas += 1

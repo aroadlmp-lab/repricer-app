@@ -25,16 +25,18 @@ def debug(marketplace_id):
 
     for oferta in ofertas:
         offer_id = oferta.offer_id_externo or str(oferta.id)
+        product_sku = oferta.product_sku or ''
         bb_error = None
         bb_info = None
         try:
-            bb_info = client.get_buybox_info(offer_id)
+            bb_info = client.get_buybox_info(offer_id, product_sku)
         except Exception as e:
             bb_error = str(e)
 
         results.append({
             'oferta_id': oferta.id,
             'offer_id_externo': offer_id,
+            'product_sku': product_sku,
             'producto': oferta.producto.nombre if oferta.producto else '',
             'precio_db': oferta.precio_actual,
             'precio_min': oferta.precio_min,

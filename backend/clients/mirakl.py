@@ -1,5 +1,5 @@
 import random
-from typing import Optional
+from typing import Optional, List
 import requests
 from .base import MarketplaceClient
 
@@ -42,6 +42,7 @@ class MiraklClient(MarketplaceClient):
                     all_offers.append({
                         'offer_id': str(o.get('offer_id', o.get('id', ''))),
                         'sku': o.get('shop_sku', ''),
+                        'product_sku': o.get('product_sku', ''),
                         'product_title': o.get('product_title', o.get('description', '')),
                         'price': float(o.get('price', 0)),
                         'stock': int(o.get('quantity', 0)),
@@ -55,21 +56,53 @@ class MiraklClient(MarketplaceClient):
                 break
         return all_offers
 
-    def get_buybox_info(self, offer_id: str) -> dict:
+    def get_buybox_info(self, offer_id: str, product_sku: str = '') -> dict:
+        """Usa P11 (GET /api/products/offers) para obtener ofertas competidoras del mismo producto."""
         if self.mock_mode:
             return self._mock_buybox(offer_id)
+        if not product_sku:
+            return {'has_buybox': False, 'best_price': 0, 'my_price': 0, 'competitors': 0, 'all_offers': []}
         try:
-            r = requests.get(f'{self.url_api}/api/offers/{offer_id}/pricing',
-                             headers=self._headers(), timeout=10)
+            r = requests.get(f'{self.url_api}/api/products/offers', headers=self._headers(),
+                             params={'product_sku': product_sku, 'max': 50}, timeout=15)
             r.raise_for_status()
             data = r.json()
+
+            all_product_offers = []
+            my_price = 0
+            best_price = float('inf')
+
+            for product in data.get('products', []):
+                for offer in product.get('offers', []):
+                    price = float(offer.get('price', 0))
+                    oid = str(offer.get('id', ''))
+                    shop = str(offer.get('shop_id', ''))
+                    all_product_offers.append({
+                        'offer_id': oid,
+                        'shop_id': shop,
+                        'price': price,
+                        'state_code': offer.get('state_code', ''),
+                    })
+                    if price > 0 and price < best_price:
+                        best_price = price
+                    if self.shop_id and shop == self.shop_id:
+                        my_price = price
+
+            if best_price == float('inf'):
+                best_price = 0
+
+            has_buybox = my_price > 0 and my_price <= best_price
+
             return {
-                'has_buybox': data.get('winner', False),
-                'buybox_price': float(data.get('best_price', 0)),
-                'competitors': data.get('total_offers', 0),
+                'has_buybox': has_buybox,
+                'best_price': round(best_price, 2),
+                'my_price': round(my_price, 2),
+                'competitors': len(all_product_offers),
+                'all_offers': all_product_offers,
             }
-        except Exception:
-            return {'has_buybox': False, 'buybox_price': 0, 'competitors': 0}
+        except Exception as e:
+            return {'has_buybox': False, 'best_price': 0, 'my_price': 0, 'competitors': 0,
+                    'all_offers': [], 'error': str(e)}
 
     def update_price(self, offer_id: str, price: float) -> bool:
         if self.mock_mode:
@@ -78,11 +111,11 @@ class MiraklClient(MarketplaceClient):
             payload = {'offers': [{'offer_id': int(offer_id), 'price': price}]}
             r = requests.put(f'{self.url_api}/api/offers', headers=self._headers(),
                              json=payload, timeout=10)
-            return r.status_code in (200, 204)
+            return r.status_code in (200, 201, 204)
         except Exception:
             return False
 
-    def _mock_offers(self) -> list[dict]:
+    def _mock_offers(self):
         skus = [
             ('IP15-128-BLK', 899.99), ('IP15-256-BLK', 999.99), ('IP15P-128-NAT', 1099.99),
             ('IP15P-256-NAT', 1199.99), ('IP15PM-256-BLU', 1299.99),
@@ -90,7 +123,8 @@ class MiraklClient(MarketplaceClient):
             ('IP13-128-GRN', 599.99), ('IPSE3-64-RED', 429.99), ('IPSE3-128-BLK', 479.99),
         ]
         return [
-            {'offer_id': str(1000 + i), 'sku': sku, 'price': price, 'stock': random.randint(0, 20)}
+            {'offer_id': str(1000 + i), 'sku': sku, 'product_sku': f'PROD-{i}',
+             'price': price, 'stock': random.randint(0, 20)}
             for i, (sku, price) in enumerate(skus)
         ]
 
@@ -99,6 +133,8 @@ class MiraklClient(MarketplaceClient):
         base_price = 500 + random.random() * 800
         return {
             'has_buybox': has_bb,
-            'buybox_price': round(base_price, 2),
+            'best_price': round(base_price, 2),
+            'my_price': round(base_price + random.uniform(-10, 10), 2),
             'competitors': random.randint(1, 8),
+            'all_offers': [],
         }
