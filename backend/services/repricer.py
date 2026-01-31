@@ -12,7 +12,7 @@ def get_client(marketplace: Marketplace) -> MiraklClient:
             api_key = decrypt_value(marketplace.api_key_encrypted)
         except Exception:
             pass
-    return MiraklClient(marketplace.url_api, api_key, marketplace.shop_id)
+    return MiraklClient(marketplace.url_api, api_key, marketplace.shop_id, marketplace.shop_name)
 
 
 def run_repricer(app=None):

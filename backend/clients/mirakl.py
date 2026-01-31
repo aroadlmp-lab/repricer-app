@@ -5,10 +5,12 @@ from .base import MarketplaceClient
 
 
 class MiraklClient(MarketplaceClient):
-    def __init__(self, url_api: str, api_key: Optional[str] = None, shop_id: Optional[str] = None):
+    def __init__(self, url_api: str, api_key: Optional[str] = None,
+                 shop_id: Optional[str] = None, shop_name: Optional[str] = None):
         self.url_api = url_api.rstrip('/')
         self.api_key = api_key
         self.shop_id = shop_id
+        self.shop_name = shop_name
         self.mock_mode = api_key is None
 
     def _headers(self):
@@ -43,7 +45,6 @@ class MiraklClient(MarketplaceClient):
                         'offer_id': str(o.get('offer_id', o.get('id', ''))),
                         'sku': o.get('shop_sku', ''),
                         'product_sku': o.get('product_sku', ''),
-                        'product_id': str(o.get('product_id', '')),
                         'product_title': o.get('product_title', o.get('description', '')),
                         'price': float(o.get('price', 0)),
                         'stock': int(o.get('quantity', 0)),
@@ -58,7 +59,7 @@ class MiraklClient(MarketplaceClient):
         return all_offers
 
     def get_buybox_info(self, offer_id: str, product_sku: str = '') -> dict:
-        """Usa P11 (GET /api/products/offers) para obtener ofertas competidoras del mismo producto."""
+        """Usa P11 (GET /api/products/offers) para obtener ofertas competidoras."""
         if self.mock_mode:
             return self._mock_buybox(offer_id)
         if not product_sku:
@@ -76,17 +77,17 @@ class MiraklClient(MarketplaceClient):
             for product in data.get('products', []):
                 for offer in product.get('offers', []):
                     price = float(offer.get('price', 0))
-                    oid = str(offer.get('id', ''))
-                    shop = str(offer.get('shop_id', ''))
+                    s_name = offer.get('shop_name', '')
+                    state = offer.get('state_code', '')
                     all_product_offers.append({
-                        'offer_id': oid,
-                        'shop_id': shop,
+                        'shop_name': s_name,
                         'price': price,
-                        'state_code': offer.get('state_code', ''),
+                        'state_code': state,
                     })
                     if price > 0 and price < best_price:
                         best_price = price
-                    if self.shop_id and shop == self.shop_id:
+                    # Match by shop_name
+                    if self.shop_name and s_name == self.shop_name:
                         my_price = price
 
             if best_price == float('inf'):

@@ -50,7 +50,10 @@ def _add_missing_columns():
     columns = [c['name'] for c in inspector.get_columns('ofertas')]
     if 'product_sku' not in columns:
         db.session.execute(text('ALTER TABLE ofertas ADD COLUMN product_sku VARCHAR(100)'))
-        db.session.commit()
+    mp_columns = [c['name'] for c in inspector.get_columns('marketplaces')]
+    if 'shop_name' not in mp_columns:
+        db.session.execute(text('ALTER TABLE marketplaces ADD COLUMN shop_name VARCHAR(100)'))
+    db.session.commit()
 
 
 def _seed_if_empty():

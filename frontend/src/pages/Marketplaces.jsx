@@ -3,7 +3,7 @@ import api from '../api'
 
 export default function Marketplaces({ onRefresh }) {
   const [items, setItems] = useState([])
-  const [form, setForm] = useState({ nombre: '', url_api: '', api_key: '', shop_id: '' })
+  const [form, setForm] = useState({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '' })
   const [editingId, setEditingId] = useState(null)
   const [testResult, setTestResult] = useState({})
   const [syncResult, setSyncResult] = useState({})
@@ -19,7 +19,7 @@ export default function Marketplaces({ onRefresh }) {
     } else {
       await api.post('/marketplaces', form)
     }
-    setForm({ nombre: '', url_api: '', api_key: '', shop_id: '' })
+    setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '' })
     setEditingId(null)
     load()
     onRefresh()
@@ -27,7 +27,7 @@ export default function Marketplaces({ onRefresh }) {
 
   const startEdit = (mp) => {
     setEditingId(mp.id)
-    setForm({ nombre: mp.nombre, url_api: mp.url_api, api_key: '', shop_id: mp.shop_id || '' })
+    setForm({ nombre: mp.nombre, url_api: mp.url_api, api_key: '', shop_id: mp.shop_id || '', shop_name: mp.shop_name || '' })
   }
 
   const testConnection = async (id) => {
@@ -73,12 +73,14 @@ export default function Marketplaces({ onRefresh }) {
             className="border rounded px-3 py-2 text-sm" type="password" />
           <input placeholder="Shop ID" value={form.shop_id} onChange={e => setForm({ ...form, shop_id: e.target.value })}
             className="border rounded px-3 py-2 text-sm" />
+          <input placeholder="Nombre tienda en marketplace (ej: iRenovo)" value={form.shop_name} onChange={e => setForm({ ...form, shop_name: e.target.value })}
+            className="border rounded px-3 py-2 text-sm col-span-2" />
         </div>
         <div className="flex gap-2">
           <button type="submit" className="bg-gray-900 text-white px-4 py-2 rounded text-sm">
             {editingId ? 'Actualizar' : 'Crear'}
           </button>
-          {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ nombre: '', url_api: '', api_key: '', shop_id: '' }) }}
+          {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '' }) }}
             className="text-gray-500 text-sm">Cancelar</button>}
         </div>
       </form>
