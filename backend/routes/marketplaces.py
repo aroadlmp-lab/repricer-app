@@ -59,6 +59,23 @@ def test_conexion(id):
     return jsonify({'ok': ok, 'mock_mode': client.mock_mode})
 
 
+@bp.route('/<int:id>/raw', methods=['GET'])
+def raw_offers(id):
+    """Debug: ver datos raw de la primera oferta de la API."""
+    import requests as req
+    mp = Marketplace.query.get_or_404(id)
+    client = get_client(mp)
+    if client.mock_mode:
+        return jsonify({'error': 'mock mode'})
+    try:
+        r = req.get(f'{client.url_api}/api/offers', headers=client._headers(),
+                    params={'max': 2}, timeout=15)
+        r.raise_for_status()
+        return jsonify(r.json())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @bp.route('/<int:id>/sync', methods=['POST'])
 def sincronizar(id):
     mp = Marketplace.query.get_or_404(id)
@@ -90,17 +107,20 @@ def sincronizar(id):
             offer_id_externo=o['offer_id']
         ).first()
 
+        # Guardar product_id si existe, sino product_sku
+        p_sku = o.get('product_id', '') or o.get('product_sku', '')
+
         if oferta:
             oferta.precio_actual = o['price']
             oferta.stock = o['stock']
-            oferta.product_sku = o.get('product_sku', '')
+            oferta.product_sku = p_sku
             actualizadas += 1
         else:
             oferta = Oferta(
                 marketplace_id=mp.id,
                 producto_id=producto.id,
                 offer_id_externo=o['offer_id'],
-                product_sku=o.get('product_sku', ''),
+                product_sku=p_sku,
                 precio_actual=o['price'],
                 precio_min=round(o['price'] * 0.90, 2),
                 precio_max=round(o['price'] * 1.10, 2),

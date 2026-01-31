@@ -43,6 +43,7 @@ class MiraklClient(MarketplaceClient):
                         'offer_id': str(o.get('offer_id', o.get('id', ''))),
                         'sku': o.get('shop_sku', ''),
                         'product_sku': o.get('product_sku', ''),
+                        'product_id': str(o.get('product_id', '')),
                         'product_title': o.get('product_title', o.get('description', '')),
                         'price': float(o.get('price', 0)),
                         'stock': int(o.get('quantity', 0)),
@@ -64,7 +65,7 @@ class MiraklClient(MarketplaceClient):
             return {'has_buybox': False, 'best_price': 0, 'my_price': 0, 'competitors': 0, 'all_offers': []}
         try:
             r = requests.get(f'{self.url_api}/api/products/offers', headers=self._headers(),
-                             params={'product_sku': product_sku, 'max': 50}, timeout=15)
+                             params={'product_ids': product_sku}, timeout=15)
             r.raise_for_status()
             data = r.json()
 
