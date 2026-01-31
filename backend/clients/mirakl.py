@@ -106,38 +106,52 @@ class MiraklClient(MarketplaceClient):
             return {'has_buybox': False, 'best_price': 0, 'my_price': 0, 'competitors': 0,
                     'all_offers': [], 'error': str(e)}
 
-    def update_price(self, offer_id: str, price: float, shop_sku: str = '') -> dict:
-        """Actualiza precio via OF24 (POST /api/offers). Devuelve dict con status y detalles."""
+    def update_price(self, offer_id: str, price: float, shop_sku: str = '',
+                     quantity: int = None, state_code: str = None) -> dict:
+        """Actualiza precio via OF24 (POST /api/offers). Envía todos los campos necesarios."""
         if self.mock_mode:
             return {'success': True}
         try:
             offer_data = {
                 'offer_id': int(offer_id),
+                'state_code': state_code or '11',
                 'price': price,
             }
             if shop_sku:
                 offer_data['shop_sku'] = shop_sku
-            payload = {'offers': [offer_data]}
+            if quantity is not None:
+                offer_data['quantity'] = quantity
 
-            # OF24 usa POST, no PUT
+            # Primero obtener datos actuales de la oferta para no perderlos
+            if quantity is None or state_code is None:
+                try:
+                    r_get = requests.get(f'{self.url_api}/api/offers', headers=self._headers(),
+                                         params={'offer_id': offer_id, 'max': 1}, timeout=10)
+                    if r_get.status_code == 200:
+                        offers = r_get.json().get('offers', [])
+                        if offers:
+                            current = offers[0]
+                            if quantity is None:
+                                offer_data['quantity'] = int(current.get('quantity', 0))
+                            if state_code is None:
+                                offer_data['state_code'] = current.get('offer_state_code', '11')
+                            if not shop_sku:
+                                offer_data['shop_sku'] = current.get('shop_sku', '')
+                except Exception:
+                    pass
+
+            payload = {'offers': [offer_data]}
             r = requests.post(f'{self.url_api}/api/offers', headers=self._headers(),
                               json=payload, timeout=10)
 
             if r.status_code in (200, 201, 204):
-                return {'success': True, 'status_code': r.status_code}
-
-            # Si POST falla, intentar PUT
-            r2 = requests.put(f'{self.url_api}/api/offers', headers=self._headers(),
-                              json=payload, timeout=10)
-            if r2.status_code in (200, 201, 204):
-                return {'success': True, 'status_code': r2.status_code, 'method': 'PUT'}
+                return {'success': True, 'status_code': r.status_code, 'sent': offer_data}
 
             return {
                 'success': False,
-                'post_status': r.status_code,
-                'post_body': r.text[:500],
-                'put_status': r2.status_code,
-                'put_body': r2.text[:500],
+                'status_code': r.status_code,
+                'body': r.text[:500],
+                'sent': offer_data,
             }
         except Exception as e:
             return {'success': False, 'error': str(e)}
