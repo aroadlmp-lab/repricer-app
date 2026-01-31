@@ -6,6 +6,8 @@ export default function Marketplaces({ onRefresh }) {
   const [form, setForm] = useState({ nombre: '', url_api: '', api_key: '', shop_id: '' })
   const [editingId, setEditingId] = useState(null)
   const [testResult, setTestResult] = useState({})
+  const [syncResult, setSyncResult] = useState({})
+  const [syncing, setSyncing] = useState({})
 
   const load = () => api.get('/marketplaces').then(r => setItems(r.data))
   useEffect(() => { load() }, [])
@@ -31,6 +33,17 @@ export default function Marketplaces({ onRefresh }) {
   const testConnection = async (id) => {
     const r = await api.post(`/marketplaces/${id}/test`)
     setTestResult({ ...testResult, [id]: r.data })
+  }
+
+  const syncOffers = async (id) => {
+    setSyncing({ ...syncing, [id]: true })
+    try {
+      const r = await api.post(`/marketplaces/${id}/sync`)
+      setSyncResult({ ...syncResult, [id]: r.data })
+    } catch (e) {
+      setSyncResult({ ...syncResult, [id]: { status: 'error', message: 'Error de conexion' } })
+    }
+    setSyncing({ ...syncing, [id]: false })
   }
 
   const toggleActivo = async (mp) => {
@@ -83,6 +96,15 @@ export default function Marketplaces({ onRefresh }) {
                   {testResult[mp.id].ok ? 'OK' : 'Error'}{testResult[mp.id].mock_mode ? ' (mock)' : ''}
                 </span>
               )}
+              {syncResult[mp.id] && (
+                <span className={`text-xs px-2 py-0.5 rounded ${syncResult[mp.id].status === 'ok' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                  {syncResult[mp.id].status === 'ok' ? `${syncResult[mp.id].nuevas} nuevas, ${syncResult[mp.id].actualizadas} actualizadas` : syncResult[mp.id].message}
+                </span>
+              )}
+              <button onClick={() => syncOffers(mp.id)} disabled={syncing[mp.id]}
+                className="text-xs text-purple-600 hover:underline disabled:opacity-50">
+                {syncing[mp.id] ? 'Sincronizando...' : 'Sincronizar'}
+              </button>
               <button onClick={() => testConnection(mp.id)} className="text-xs text-blue-600 hover:underline">Test</button>
               <button onClick={() => startEdit(mp)} className="text-xs text-blue-600 hover:underline">Editar</button>
               <button onClick={() => toggleActivo(mp)}

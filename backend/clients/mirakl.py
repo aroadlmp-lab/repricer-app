@@ -24,25 +24,36 @@ class MiraklClient(MarketplaceClient):
         except Exception:
             return False
 
-    def get_offers(self) -> list[dict]:
+    def get_offers(self):
         if self.mock_mode:
             return self._mock_offers()
-        try:
-            r = requests.get(f'{self.url_api}/api/offers', headers=self._headers(),
-                             params={'max': 100}, timeout=30)
-            r.raise_for_status()
-            data = r.json()
-            return [
-                {
-                    'offer_id': str(o.get('offer_id', o.get('id', ''))),
-                    'sku': o.get('shop_sku', ''),
-                    'price': float(o.get('price', 0)),
-                    'stock': int(o.get('quantity', 0)),
-                }
-                for o in data.get('offers', [])
-            ]
-        except Exception:
-            return []
+        all_offers = []
+        offset = 0
+        while True:
+            try:
+                r = requests.get(f'{self.url_api}/api/offers', headers=self._headers(),
+                                 params={'max': 100, 'offset': offset}, timeout=30)
+                r.raise_for_status()
+                data = r.json()
+                offers = data.get('offers', [])
+                if not offers:
+                    break
+                for o in offers:
+                    all_offers.append({
+                        'offer_id': str(o.get('offer_id', o.get('id', ''))),
+                        'sku': o.get('shop_sku', ''),
+                        'product_title': o.get('product_title', o.get('description', '')),
+                        'price': float(o.get('price', 0)),
+                        'stock': int(o.get('quantity', 0)),
+                        'state_code': o.get('offer_state_code', ''),
+                        'ean': o.get('product_references', [{}])[0].get('reference', '') if o.get('product_references') else '',
+                    })
+                if len(offers) < 100:
+                    break
+                offset += 100
+            except Exception:
+                break
+        return all_offers
 
     def get_buybox_info(self, offer_id: str) -> dict:
         if self.mock_mode:
