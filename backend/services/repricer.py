@@ -56,8 +56,11 @@ def _execute_repricer():
                     nuevo_precio = _calcular_precio(oferta, bb_info)
 
                     if nuevo_precio and nuevo_precio != oferta.precio_actual:
-                        success = client.update_price(offer_id, nuevo_precio)
-                        if success:
+                        shop_sku = ''
+                        if oferta.producto:
+                            shop_sku = oferta.producto.sku
+                        result = client.update_price(offer_id, nuevo_precio, shop_sku)
+                        if result.get('success'):
                             motivo = _generar_motivo(oferta, bb_info, nuevo_precio)
                             hist = HistoricoPrecios(
                                 oferta_id=oferta.id,
@@ -70,6 +73,8 @@ def _execute_repricer():
                             oferta.precio_actual = nuevo_precio
                             oferta.tiene_buybox = bb_info['has_buybox']
                             cambios += 1
+                        else:
+                            errores_list.append(f'Oferta {oferta.id}: update failed: {result}')
                 except Exception as e:
                     errores_list.append(f'Oferta {oferta.id}: {str(e)}')
 

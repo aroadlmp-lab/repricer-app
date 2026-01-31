@@ -50,6 +50,25 @@ def debug(marketplace_id):
     return jsonify({
         'marketplace': mp.nombre,
         'mock_mode': client.mock_mode,
+        'shop_name': mp.shop_name,
         'ofertas_activas': len(ofertas),
         'detalle': results,
+    })
+
+
+@bp.route('/test-update/<int:oferta_id>', methods=['GET'])
+def test_update(oferta_id):
+    """Prueba el update_price SIN cambiar el precio (envia el precio actual)."""
+    oferta = Oferta.query.get_or_404(oferta_id)
+    mp = Marketplace.query.get_or_404(oferta.marketplace_id)
+    client = get_client(mp)
+    shop_sku = oferta.producto.sku if oferta.producto else ''
+    offer_id = oferta.offer_id_externo or str(oferta.id)
+
+    result = client.update_price(offer_id, oferta.precio_actual, shop_sku)
+    return jsonify({
+        'offer_id': offer_id,
+        'shop_sku': shop_sku,
+        'precio': oferta.precio_actual,
+        'result': result,
     })

@@ -106,16 +106,41 @@ class MiraklClient(MarketplaceClient):
             return {'has_buybox': False, 'best_price': 0, 'my_price': 0, 'competitors': 0,
                     'all_offers': [], 'error': str(e)}
 
-    def update_price(self, offer_id: str, price: float) -> bool:
+    def update_price(self, offer_id: str, price: float, shop_sku: str = '') -> dict:
+        """Actualiza precio via OF24 (POST /api/offers). Devuelve dict con status y detalles."""
         if self.mock_mode:
-            return True
+            return {'success': True}
         try:
-            payload = {'offers': [{'offer_id': int(offer_id), 'price': price}]}
-            r = requests.put(f'{self.url_api}/api/offers', headers=self._headers(),
-                             json=payload, timeout=10)
-            return r.status_code in (200, 201, 204)
-        except Exception:
-            return False
+            offer_data = {
+                'offer_id': int(offer_id),
+                'price': price,
+            }
+            if shop_sku:
+                offer_data['shop_sku'] = shop_sku
+            payload = {'offers': [offer_data]}
+
+            # OF24 usa POST, no PUT
+            r = requests.post(f'{self.url_api}/api/offers', headers=self._headers(),
+                              json=payload, timeout=10)
+
+            if r.status_code in (200, 201, 204):
+                return {'success': True, 'status_code': r.status_code}
+
+            # Si POST falla, intentar PUT
+            r2 = requests.put(f'{self.url_api}/api/offers', headers=self._headers(),
+                              json=payload, timeout=10)
+            if r2.status_code in (200, 201, 204):
+                return {'success': True, 'status_code': r2.status_code, 'method': 'PUT'}
+
+            return {
+                'success': False,
+                'post_status': r.status_code,
+                'post_body': r.text[:500],
+                'put_status': r2.status_code,
+                'put_body': r2.text[:500],
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
 
     def _mock_offers(self):
         skus = [
