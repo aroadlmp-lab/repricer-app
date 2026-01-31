@@ -107,38 +107,18 @@ class MiraklClient(MarketplaceClient):
                     'all_offers': [], 'error': str(e)}
 
     def update_price(self, offer_id: str, price: float, shop_sku: str = '',
-                     quantity: int = None, state_code: str = None) -> dict:
-        """Actualiza precio via OF24 (POST /api/offers). Envía todos los campos necesarios."""
+                     quantity: int = None) -> dict:
+        """Actualiza precio via OF24 (POST /api/offers). Solo envía price + campos obligatorios."""
         if self.mock_mode:
             return {'success': True}
         try:
             offer_data = {
-                'offer_id': int(offer_id),
-                'state_code': state_code or '11',
+                'shop_sku': shop_sku,
                 'price': price,
             }
-            if shop_sku:
-                offer_data['shop_sku'] = shop_sku
+            # Solo incluir quantity si lo tenemos
             if quantity is not None:
                 offer_data['quantity'] = quantity
-
-            # Primero obtener datos actuales de la oferta para no perderlos
-            if quantity is None or state_code is None:
-                try:
-                    r_get = requests.get(f'{self.url_api}/api/offers', headers=self._headers(),
-                                         params={'offer_id': offer_id, 'max': 1}, timeout=10)
-                    if r_get.status_code == 200:
-                        offers = r_get.json().get('offers', [])
-                        if offers:
-                            current = offers[0]
-                            if quantity is None:
-                                offer_data['quantity'] = int(current.get('quantity', 0))
-                            if state_code is None:
-                                offer_data['state_code'] = current.get('offer_state_code', '11')
-                            if not shop_sku:
-                                offer_data['shop_sku'] = current.get('shop_sku', '')
-                except Exception:
-                    pass
 
             payload = {'offers': [offer_data]}
             r = requests.post(f'{self.url_api}/api/offers', headers=self._headers(),

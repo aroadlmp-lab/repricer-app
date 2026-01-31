@@ -59,7 +59,10 @@ def _execute_repricer():
                         shop_sku = ''
                         if oferta.producto:
                             shop_sku = oferta.producto.sku
-                        result = client.update_price(offer_id, nuevo_precio, shop_sku)
+                        result = client.update_price(
+                            offer_id, nuevo_precio, shop_sku,
+                            quantity=oferta.stock,
+                        )
                         if result.get('success'):
                             motivo = _generar_motivo(oferta, bb_info, nuevo_precio)
                             hist = HistoricoPrecios(
