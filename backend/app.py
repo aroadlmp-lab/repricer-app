@@ -41,7 +41,6 @@ def create_app():
     with app.app_context():
         db.create_all()
         _add_missing_columns()
-        _seed_if_empty()
 
     if os.environ.get('ENABLE_SCHEDULER', '').lower() in ('true', '1', 'yes'):
         _start_scheduler(app)
@@ -79,55 +78,3 @@ def _add_missing_columns():
     db.session.commit()
 
 
-def _seed_if_empty():
-    from models import Marketplace, Producto, Oferta
-
-    if Marketplace.query.count() > 0:
-        return
-
-    mp1 = Marketplace(nombre='Carrefour', tipo='mirakl', url_api='https://carrefour-mirakl.example.com')
-    mp2 = Marketplace(nombre='Phonehouse', tipo='mirakl', url_api='https://phonehouse-mirakl.example.com')
-    db.session.add_all([mp1, mp2])
-    db.session.flush()
-
-    productos_data = [
-        ('IP15-128-BLK', '1234567890001', 'iPhone 15 128GB Negro', 'Apple'),
-        ('IP15-256-BLK', '1234567890002', 'iPhone 15 256GB Negro', 'Apple'),
-        ('IP15P-128-NAT', '1234567890003', 'iPhone 15 Pro 128GB Natural', 'Apple'),
-        ('IP15P-256-NAT', '1234567890004', 'iPhone 15 Pro 256GB Natural', 'Apple'),
-        ('IP15PM-256-BLU', '1234567890005', 'iPhone 15 Pro Max 256GB Azul', 'Apple'),
-        ('IP14-128-WHT', '1234567890006', 'iPhone 14 128GB Blanco', 'Apple'),
-        ('IP14P-128-PRP', '1234567890007', 'iPhone 14 Pro 128GB Morado', 'Apple'),
-        ('IP13-128-GRN', '1234567890008', 'iPhone 13 128GB Verde', 'Apple'),
-        ('IPSE3-64-RED', '1234567890009', 'iPhone SE 3 64GB Rojo', 'Apple'),
-        ('IPSE3-128-BLK', '1234567890010', 'iPhone SE 3 128GB Negro', 'Apple'),
-    ]
-
-    productos = []
-    for sku, ean, nombre, marca in productos_data:
-        p = Producto(sku=sku, ean=ean, nombre=nombre, marca=marca)
-        productos.append(p)
-    db.session.add_all(productos)
-    db.session.flush()
-
-    import random
-    precios_base = [899.99, 999.99, 1099.99, 1199.99, 1299.99, 699.99, 899.99, 599.99, 429.99, 479.99]
-
-    for mp in [mp1, mp2]:
-        for i, prod in enumerate(productos):
-            precio = precios_base[i] + random.uniform(-20, 20)
-            precio = round(precio, 2)
-            oferta = Oferta(
-                marketplace_id=mp.id,
-                producto_id=prod.id,
-                offer_id_externo=str(1000 + i + (10 if mp == mp2 else 0)),
-                precio_actual=precio,
-                precio_min=round(precio * 0.85, 2),
-                precio_max=round(precio * 1.10, 2),
-                stock=random.randint(0, 15),
-                tiene_buybox=random.random() > 0.4,
-                activo=True,
-            )
-            db.session.add(oferta)
-
-    db.session.commit()

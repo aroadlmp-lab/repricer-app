@@ -13,6 +13,9 @@ def sync_marketplace(mp):
     if not ofertas_api:
         return None
 
+    # Solo sincronizar ofertas con stock
+    ofertas_api = [o for o in ofertas_api if o.get('stock', 0) > 0]
+
     nuevas = 0
     actualizadas = 0
 

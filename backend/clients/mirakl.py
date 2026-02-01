@@ -79,10 +79,12 @@ class MiraklClient(MarketplaceClient):
                     price = float(offer.get('price', 0))
                     s_name = offer.get('shop_name', '')
                     state = offer.get('state_code', '')
+                    is_mine = bool(self.shop_name and s_name == self.shop_name)
                     all_product_offers.append({
                         'shop_name': s_name,
                         'price': price,
                         'state_code': state,
+                        'is_mine': is_mine,
                     })
                     if price > 0 and price < best_price:
                         best_price = price

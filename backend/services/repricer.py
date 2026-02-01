@@ -55,6 +55,9 @@ def _execute_repricer():
 
                     nuevo_precio = _calcular_precio(oferta, bb_info, bb_info.get('all_offers', []))
 
+                    # Siempre actualizar estado buybox
+                    oferta.tiene_buybox = bb_info['has_buybox']
+
                     if nuevo_precio and nuevo_precio != oferta.precio_actual:
                         shop_sku = ''
                         if oferta.producto:
@@ -74,7 +77,6 @@ def _execute_repricer():
                             )
                             db.session.add(hist)
                             oferta.precio_actual = nuevo_precio
-                            oferta.tiene_buybox = bb_info['has_buybox']
                             cambios += 1
                         else:
                             errores_list.append(f'Oferta {oferta.id}: update failed: {result}')
@@ -117,9 +119,11 @@ def _calcular_precio(oferta: Oferta, bb_info: dict, all_offers: list = None) -> 
     best_price = bb_info.get('best_price', 0)
 
     if not bb_info['has_buybox']:
-        # No tenemos la mejor posicion: bajar 0.01 por debajo del mejor precio
-        if best_price > 0:
-            nuevo = round(best_price - 0.01, 2)
+        # No tenemos la mejor posicion: bajar 0.01 por debajo del mejor competidor (excluyendo nuestras ofertas)
+        competitor_best = _find_best_competitor_price(all_offers or [])
+        target = competitor_best if competitor_best else best_price
+        if target > 0:
+            nuevo = round(target - 0.01, 2)
         else:
             nuevo = round(precio - 0.01, 2)
         if nuevo >= precio_min:
@@ -138,9 +142,18 @@ def _calcular_precio(oferta: Oferta, bb_info: dict, all_offers: list = None) -> 
 
 
 def _find_next_competitor_price(my_price: float, all_offers: list) -> Optional[float]:
-    """Find the next competitor price above ours."""
+    """Find the next competitor price above ours (excluding our own offers)."""
     higher_prices = [
         o['price'] for o in all_offers
         if o.get('price', 0) > my_price and not o.get('is_mine', False)
     ]
     return min(higher_prices) if higher_prices else None
+
+
+def _find_best_competitor_price(all_offers: list) -> Optional[float]:
+    """Find the lowest competitor price (excluding our own offers)."""
+    competitor_prices = [
+        o['price'] for o in all_offers
+        if o.get('price', 0) > 0 and not o.get('is_mine', False)
+    ]
+    return min(competitor_prices) if competitor_prices else None
