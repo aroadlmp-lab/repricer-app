@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from extensions import db
-from models import Oferta
+from models import Oferta, Producto
 
 bp = Blueprint('ofertas', __name__, url_prefix='/api/ofertas')
 
@@ -40,6 +40,12 @@ def actualizar(id):
     for field in ('precio_actual', 'precio_min', 'precio_max', 'stock', 'activo', 'offer_id_externo'):
         if field in data:
             setattr(o, field, data[field])
+    # Si el precio actual supera el nuevo max, ajustar
+    if o.precio_max is not None and o.precio_actual > o.precio_max:
+        o.precio_actual = o.precio_max
+    # Si el precio actual está por debajo del nuevo min, ajustar
+    if o.precio_min is not None and o.precio_actual < o.precio_min:
+        o.precio_actual = o.precio_min
     db.session.commit()
     return jsonify(o.to_dict())
 
@@ -64,12 +70,21 @@ def bulk_update():
 
 @bp.route('/mock', methods=['DELETE'])
 def eliminar_mock():
+    MOCK_SKUS = [
+        'IP15-128-BLK', 'IP15-256-BLK', 'IP15P-128-NAT', 'IP15P-256-NAT',
+        'IP15PM-256-BLU', 'IP14-128-WHT', 'IP14P-128-PRP', 'IP13-128-GRN',
+        'IPSE3-64-RED', 'IPSE3-128-BLK',
+    ]
+    mock_producto_ids = [p.id for p in Producto.query.filter(Producto.sku.in_(MOCK_SKUS)).all()]
     mock_ofertas = Oferta.query.filter(
-        (Oferta.product_sku == None) | (Oferta.product_sku == '')
+        (Oferta.product_sku == None) | (Oferta.product_sku == '') |
+        Oferta.producto_id.in_(mock_producto_ids)
     ).all()
     count = len(mock_ofertas)
     for o in mock_ofertas:
         db.session.delete(o)
+    # También eliminar los productos mock
+    Producto.query.filter(Producto.sku.in_(MOCK_SKUS)).delete(synchronize_session=False)
     db.session.commit()
     return jsonify({'deleted': count})
 
