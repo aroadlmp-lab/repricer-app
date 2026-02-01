@@ -12,6 +12,18 @@ export default function Ofertas({ selectedMp }) {
   const [ofertas, setOfertas] = useState([])
   const [filtro, setFiltro] = useState('todas')
   const [busqueda, setBusqueda] = useState('')
+  const [deleting, setDeleting] = useState(false)
+
+  const deleteMock = async () => {
+    if (!confirm('Eliminar todas las ofertas y productos de prueba?')) return
+    setDeleting(true)
+    try {
+      const r = await api.delete('/ofertas/mock')
+      alert(`Eliminadas: ${r.data.deleted} ofertas mock`)
+      load()
+    } catch { alert('Error al eliminar') }
+    setDeleting(false)
+  }
 
   const load = () => {
     const params = selectedMp ? { marketplace_id: selectedMp } : {}
@@ -49,6 +61,13 @@ export default function Ofertas({ selectedMp }) {
             onChange={e => setBusqueda(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
+          <button
+            onClick={deleteMock}
+            disabled={deleting}
+            className="px-3 py-1.5 text-sm rounded-lg border border-red-300 text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+          >
+            {deleting ? 'Eliminando...' : 'Borrar mock'}
+          </button>
           <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
             {FILTERS.map(f => (
               <button
