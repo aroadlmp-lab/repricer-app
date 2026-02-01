@@ -28,7 +28,7 @@ class Marketplace(db.Model):
             'shop_name': self.shop_name,
             'activo': self.activo,
             'tiene_api_key': self.api_key_encrypted is not None,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': (self.created_at.isoformat() + 'Z') if self.created_at else None,
         }
 
 
@@ -87,7 +87,7 @@ class Oferta(db.Model):
             'stock': self.stock,
             'tiene_buybox': self.tiene_buybox,
             'activo': self.activo,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'updated_at': (self.updated_at.isoformat() + 'Z') if self.updated_at else None,
             'producto': self.producto.to_dict() if self.producto else None,
             'marketplace_nombre': self.marketplace.nombre if self.marketplace else None,
         }
@@ -112,7 +112,7 @@ class HistoricoPrecios(db.Model):
             'precio_nuevo': self.precio_nuevo,
             'motivo': self.motivo,
             'tenia_buybox': self.tenia_buybox,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': (self.created_at.isoformat() + 'Z') if self.created_at else None,
             'oferta': {
                 'producto': self.oferta.producto.to_dict() if self.oferta and self.oferta.producto else None,
                 'marketplace_nombre': self.oferta.marketplace.nombre if self.oferta and self.oferta.marketplace else None,
@@ -140,5 +140,5 @@ class Ejecucion(db.Model):
             'ofertas_procesadas': self.ofertas_procesadas,
             'cambios_realizados': self.cambios_realizados,
             'errores': self.errores,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': (self.created_at.isoformat() + 'Z') if self.created_at else None,
         }
