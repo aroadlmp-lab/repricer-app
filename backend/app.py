@@ -1,9 +1,11 @@
 import os
+import logging
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 from extensions import db, migrate
 
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist')
+logger = logging.getLogger(__name__)
 
 
 def create_app():
@@ -41,7 +43,28 @@ def create_app():
         _add_missing_columns()
         _seed_if_empty()
 
+    if os.environ.get('ENABLE_SCHEDULER', '').lower() in ('true', '1', 'yes'):
+        _start_scheduler(app)
+
     return app
+
+
+def _start_scheduler(app):
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from services.repricer import run_repricer
+    from services.sync import sync_all
+
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(
+        func=run_repricer, trigger='interval', minutes=15,
+        args=[app], id='repricer_job',
+    )
+    scheduler.add_job(
+        func=sync_all, trigger='cron', hour=6, minute=0,
+        args=[app], id='sync_job',
+    )
+    scheduler.start()
+    logger.info('Scheduler started: repricer (15min) + sync (daily 06:00 UTC)')
 
 
 def _add_missing_columns():

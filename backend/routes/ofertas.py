@@ -62,6 +62,18 @@ def bulk_update():
     return jsonify(updated)
 
 
+@bp.route('/mock', methods=['DELETE'])
+def eliminar_mock():
+    mock_ofertas = Oferta.query.filter(
+        (Oferta.product_sku == None) | (Oferta.product_sku == '')
+    ).all()
+    count = len(mock_ofertas)
+    for o in mock_ofertas:
+        db.session.delete(o)
+    db.session.commit()
+    return jsonify({'deleted': count})
+
+
 @bp.route('/<int:id>', methods=['DELETE'])
 def eliminar(id):
     o = Oferta.query.get_or_404(id)

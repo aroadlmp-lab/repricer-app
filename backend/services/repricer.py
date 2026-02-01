@@ -53,7 +53,7 @@ def _execute_repricer():
                         # No hay competidores o no se pudo obtener info
                         continue
 
-                    nuevo_precio = _calcular_precio(oferta, bb_info)
+                    nuevo_precio = _calcular_precio(oferta, bb_info, bb_info.get('all_offers', []))
 
                     if nuevo_precio and nuevo_precio != oferta.precio_actual:
                         shop_sku = ''
@@ -110,7 +110,7 @@ def _generar_motivo(oferta, bb_info, nuevo_precio):
         return f'Subir manteniendo mejor posicion (mejor precio competidor: {best})'
 
 
-def _calcular_precio(oferta: Oferta, bb_info: dict) -> Optional[float]:
+def _calcular_precio(oferta: Oferta, bb_info: dict, all_offers: list = None) -> Optional[float]:
     precio = oferta.precio_actual
     precio_min = oferta.precio_min or 0
     precio_max = oferta.precio_max or float('inf')
@@ -126,8 +126,21 @@ def _calcular_precio(oferta: Oferta, bb_info: dict) -> Optional[float]:
             return nuevo
         return None
     else:
-        # Tenemos la mejor posicion: intentar subir 0.01
-        nuevo = round(precio + 0.01, 2)
-        if nuevo <= precio_max:
+        # Tenemos la mejor posicion: subir hasta el siguiente competidor - 0.01
+        next_competitor = _find_next_competitor_price(precio, all_offers or [])
+        if next_competitor:
+            nuevo = round(min(next_competitor - 0.01, precio_max), 2)
+        else:
+            nuevo = round(precio + 0.01, 2)
+        if nuevo <= precio_max and nuevo > precio:
             return nuevo
         return None
+
+
+def _find_next_competitor_price(my_price: float, all_offers: list) -> Optional[float]:
+    """Find the next competitor price above ours."""
+    higher_prices = [
+        o['price'] for o in all_offers
+        if o.get('price', 0) > my_price and not o.get('is_mine', False)
+    ]
+    return min(higher_prices) if higher_prices else None

@@ -1,0 +1,81 @@
+import logging
+from extensions import db
+from models import Marketplace, Producto, Oferta
+from services.repricer import get_client
+
+logger = logging.getLogger(__name__)
+
+
+def sync_marketplace(mp):
+    client = get_client(mp)
+    ofertas_api = client.get_offers()
+
+    if not ofertas_api:
+        return None
+
+    nuevas = 0
+    actualizadas = 0
+
+    for o in ofertas_api:
+        producto = Producto.query.filter_by(sku=o['sku']).first()
+        if not producto:
+            producto = Producto(
+                sku=o['sku'],
+                ean=o.get('ean', ''),
+                nombre=o.get('product_title', o['sku']),
+                marca='',
+            )
+            db.session.add(producto)
+            db.session.flush()
+
+        oferta = Oferta.query.filter_by(
+            marketplace_id=mp.id,
+            offer_id_externo=o['offer_id']
+        ).first()
+
+        p_sku = o.get('product_id', '') or o.get('product_sku', '')
+
+        if oferta:
+            oferta.precio_actual = o['price']
+            oferta.stock = o['stock']
+            oferta.product_sku = p_sku
+            actualizadas += 1
+        else:
+            oferta = Oferta(
+                marketplace_id=mp.id,
+                producto_id=producto.id,
+                offer_id_externo=o['offer_id'],
+                product_sku=p_sku,
+                precio_actual=o['price'],
+                precio_min=round(o['price'] * 0.90, 2),
+                precio_max=round(o['price'] * 1.10, 2),
+                stock=o['stock'],
+                tiene_buybox=False,
+                activo=False,
+            )
+            db.session.add(oferta)
+            nuevas += 1
+
+    db.session.commit()
+    return {
+        'ofertas_api': len(ofertas_api),
+        'nuevas': nuevas,
+        'actualizadas': actualizadas,
+    }
+
+
+def sync_all(app=None):
+    if app:
+        ctx = app.app_context()
+        ctx.push()
+    try:
+        marketplaces = Marketplace.query.filter_by(activo=True).all()
+        for mp in marketplaces:
+            try:
+                result = sync_marketplace(mp)
+                logger.info(f'Sync {mp.nombre}: {result}')
+            except Exception as e:
+                logger.error(f'Sync {mp.nombre} failed: {e}')
+    finally:
+        if app:
+            ctx.pop()
