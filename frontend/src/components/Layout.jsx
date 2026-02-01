@@ -7,7 +7,7 @@ const navItems = [
   { to: '/marketplaces', label: 'Marketplaces' },
 ]
 
-export default function Layout({ children, marketplaces, selectedMp, onSelectMp }) {
+export default function Layout({ children, marketplaces, selectedMp, onSelectMp, onLogout }) {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-white border-b px-6 py-3 flex items-center justify-between">
@@ -28,15 +28,23 @@ export default function Layout({ children, marketplaces, selectedMp, onSelectMp 
             ))}
           </nav>
         </div>
-        <select
-          value={selectedMp || ''}
-          onChange={e => onSelectMp(Number(e.target.value))}
-          className="border rounded px-3 py-1.5 text-sm"
-        >
-          {marketplaces.map(mp => (
-            <option key={mp.id} value={mp.id}>{mp.nombre}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-3">
+          <select
+            value={selectedMp || ''}
+            onChange={e => onSelectMp(Number(e.target.value))}
+            className="border rounded px-3 py-1.5 text-sm"
+          >
+            {marketplaces.map(mp => (
+              <option key={mp.id} value={mp.id}>{mp.nombre}</option>
+            ))}
+          </select>
+          <button
+            onClick={onLogout}
+            className="text-sm text-gray-500 hover:text-gray-900"
+          >
+            Salir
+          </button>
+        </div>
       </header>
       <main className="flex-1 p-6">{children}</main>
     </div>

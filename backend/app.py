@@ -1,6 +1,6 @@
 import os
 import logging
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, session, jsonify, request
 from flask_cors import CORS
 from extensions import db, migrate
 
@@ -21,12 +21,19 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
 
-    from routes import marketplaces, productos, ofertas, historico, repricer
+    from routes import marketplaces, productos, ofertas, historico, repricer, auth
+    app.register_blueprint(auth.bp)
     app.register_blueprint(marketplaces.bp)
     app.register_blueprint(productos.bp)
     app.register_blueprint(ofertas.bp)
     app.register_blueprint(historico.bp)
     app.register_blueprint(repricer.bp)
+
+    @app.before_request
+    def require_auth():
+        if request.path.startswith('/api/') and not request.path.startswith('/api/auth/'):
+            if 'user' not in session:
+                return jsonify({'error': 'No autenticado'}), 401
 
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
