@@ -26,14 +26,11 @@ def sync_marketplace(mp):
             offer_id_externo=o['offer_id']
         ).first()
 
-        # Si stock es 0: actualizar stock si ya existe, pero no crear nueva
+        # Si stock es 0: eliminar si ya existe, no crear nueva
         if stock <= 0:
             if oferta:
-                oferta.stock = 0
-                oferta.product_sku = p_sku
-                actualizadas += 1
-            else:
-                ignoradas += 1
+                db.session.delete(oferta)
+            ignoradas += 1
             continue
 
         producto = Producto.query.filter_by(sku=o['sku']).first()
