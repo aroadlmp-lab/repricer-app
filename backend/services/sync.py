@@ -48,6 +48,7 @@ def sync_marketplace(mp):
             oferta.precio_actual = o['price']
             oferta.stock = stock
             oferta.product_sku = p_sku
+            oferta.state_code = o.get('state_code', '')
             actualizadas += 1
         else:
             oferta = Oferta(
@@ -59,6 +60,7 @@ def sync_marketplace(mp):
                 precio_min=round(o['price'] * 0.90, 2),
                 precio_max=round(o['price'] * 1.10, 2),
                 stock=stock,
+                state_code=o.get('state_code', ''),
                 tiene_buybox=False,
                 activo=False,
             )

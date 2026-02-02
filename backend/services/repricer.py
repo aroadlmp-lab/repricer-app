@@ -12,7 +12,8 @@ def get_client(marketplace: Marketplace) -> MiraklClient:
             api_key = decrypt_value(marketplace.api_key_encrypted)
         except Exception:
             pass
-    return MiraklClient(marketplace.url_api, api_key, marketplace.shop_id, marketplace.shop_name)
+    return MiraklClient(marketplace.url_api, api_key, marketplace.shop_id, marketplace.shop_name,
+                        channel_code=marketplace.channel_code)
 
 
 def run_repricer(app=None):
@@ -53,7 +54,11 @@ def _execute_repricer():
                         # No hay competidores o no se pudo obtener info
                         continue
 
-                    nuevo_precio = _calcular_precio(oferta, bb_info, bb_info.get('all_offers', []))
+                    all_offers = bb_info.get('all_offers', [])
+                    # Filter competitors by same state_code if the offer has one
+                    if oferta.state_code:
+                        all_offers = [o for o in all_offers if o.get('state_code') == oferta.state_code]
+                    nuevo_precio = _calcular_precio(oferta, bb_info, all_offers)
 
                     # Siempre actualizar estado buybox
                     oferta.tiene_buybox = bb_info['has_buybox']

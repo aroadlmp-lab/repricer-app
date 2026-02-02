@@ -6,11 +6,13 @@ from .base import MarketplaceClient
 
 class MiraklClient(MarketplaceClient):
     def __init__(self, url_api: str, api_key: Optional[str] = None,
-                 shop_id: Optional[str] = None, shop_name: Optional[str] = None):
+                 shop_id: Optional[str] = None, shop_name: Optional[str] = None,
+                 channel_code: Optional[str] = None):
         self.url_api = url_api.rstrip('/')
         self.api_key = api_key
         self.shop_id = shop_id
         self.shop_name = shop_name
+        self.channel_code = channel_code
         self.mock_mode = api_key is None
 
     def _headers(self):
@@ -41,12 +43,32 @@ class MiraklClient(MarketplaceClient):
                 if not offers:
                     break
                 for o in offers:
+                    # Filter by channel if configured
+                    if self.channel_code:
+                        channels = [ch.get('code', '') for ch in o.get('channels', [])]
+                        if self.channel_code not in channels:
+                            continue
+
+                    # Extract price: prefer channel-specific price from all_prices
+                    price = float(o.get('price', 0))
+                    if self.channel_code and o.get('all_prices'):
+                        for ap in o['all_prices']:
+                            if ap.get('channel_code') == self.channel_code:
+                                price = float(ap.get('unit_origin_price', ap.get('price', price)))
+                                break
+                        else:
+                            # Fallback: entry with channel_code=None (default price)
+                            for ap in o['all_prices']:
+                                if ap.get('channel_code') is None:
+                                    price = float(ap.get('unit_origin_price', ap.get('price', price)))
+                                    break
+
                     all_offers.append({
                         'offer_id': str(o.get('offer_id', o.get('id', ''))),
                         'sku': o.get('shop_sku', ''),
                         'product_sku': o.get('product_sku', ''),
                         'product_title': o.get('product_title', o.get('description', '')),
-                        'price': float(o.get('price', 0)),
+                        'price': price,
                         'stock': int(o.get('quantity', 0)),
                         'state_code': o.get('offer_state_code', ''),
                         'ean': o.get('product_references', [{}])[0].get('reference', '') if o.get('product_references') else '',
@@ -76,7 +98,19 @@ class MiraklClient(MarketplaceClient):
 
             for product in data.get('products', []):
                 for offer in product.get('offers', []):
+                    # Extract price: prefer channel-specific from all_prices
                     price = float(offer.get('price', 0))
+                    if self.channel_code and offer.get('all_prices'):
+                        for ap in offer['all_prices']:
+                            if ap.get('channel_code') == self.channel_code:
+                                price = float(ap.get('unit_origin_price', ap.get('price', price)))
+                                break
+                        else:
+                            for ap in offer['all_prices']:
+                                if ap.get('channel_code') is None:
+                                    price = float(ap.get('unit_origin_price', ap.get('price', price)))
+                                    break
+
                     s_name = offer.get('shop_name', '')
                     state = offer.get('state_code', '')
                     is_mine = bool(self.shop_name and s_name == self.shop_name)
@@ -116,8 +150,12 @@ class MiraklClient(MarketplaceClient):
         try:
             offer_data = {
                 'shop_sku': shop_sku,
-                'price': price,
             }
+            # Use all_prices for channel-specific pricing, otherwise flat price
+            if self.channel_code:
+                offer_data['all_prices'] = [{'channel_code': self.channel_code, 'unit_origin_price': price}]
+            else:
+                offer_data['price'] = price
             # Solo incluir quantity si lo tenemos
             if quantity is not None:
                 offer_data['quantity'] = quantity

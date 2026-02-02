@@ -21,6 +21,7 @@ def crear():
         tipo=data.get('tipo', 'mirakl'),
         url_api=data['url_api'],
         shop_id=data.get('shop_id'),
+        channel_code=data.get('channel_code'),
         activo=data.get('activo', True),
     )
     if data.get('api_key'):
@@ -34,7 +35,7 @@ def crear():
 def actualizar(id):
     mp = Marketplace.query.get_or_404(id)
     data = request.json
-    for field in ('nombre', 'tipo', 'url_api', 'shop_id', 'shop_name', 'activo'):
+    for field in ('nombre', 'tipo', 'url_api', 'shop_id', 'shop_name', 'channel_code', 'activo'):
         if field in data:
             setattr(mp, field, data[field])
     if data.get('api_key'):

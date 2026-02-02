@@ -12,6 +12,7 @@ class Marketplace(db.Model):
     api_key_encrypted = db.Column(db.Text, nullable=True)
     shop_id = db.Column(db.String(50), nullable=True)
     shop_name = db.Column(db.String(100), nullable=True)
+    channel_code = db.Column(db.String(20), nullable=True)
     activo = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -26,6 +27,7 @@ class Marketplace(db.Model):
             'url_api': self.url_api,
             'shop_id': self.shop_id,
             'shop_name': self.shop_name,
+            'channel_code': self.channel_code,
             'activo': self.activo,
             'tiene_api_key': self.api_key_encrypted is not None,
             'created_at': (self.created_at.isoformat() + 'Z') if self.created_at else None,
@@ -66,6 +68,7 @@ class Oferta(db.Model):
     precio_min = db.Column(db.Float, nullable=True)
     precio_max = db.Column(db.Float, nullable=True)
     stock = db.Column(db.Integer, default=0)
+    state_code = db.Column(db.String(20), nullable=True)
     tiene_buybox = db.Column(db.Boolean, default=False)
     activo = db.Column(db.Boolean, default=True)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
@@ -85,6 +88,7 @@ class Oferta(db.Model):
             'precio_min': self.precio_min,
             'precio_max': self.precio_max,
             'stock': self.stock,
+            'state_code': self.state_code,
             'tiene_buybox': self.tiene_buybox,
             'activo': self.activo,
             'updated_at': (self.updated_at.isoformat() + 'Z') if self.updated_at else None,

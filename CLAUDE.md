@@ -25,6 +25,7 @@ backend/
 │   ├── repricer.py         # Lógica de repricing (_calcular_precio, _find_next_competitor_price)
 │   └── sync.py             # Sincronización de ofertas (sync_marketplace, sync_all)
 └── routes/
+    ├── auth.py             # Login, logout, sesión (/api/auth/*)
     ├── marketplaces.py     # CRUD + test + sync + raw debug
     ├── productos.py        # CRUD productos
     ├── ofertas.py          # CRUD + bulk + DELETE mock
@@ -32,14 +33,15 @@ backend/
     └── repricer.py         # Ejecución manual + debug buybox
 
 frontend/src/
-├── App.jsx                 # Router: /, /ofertas, /historico, /marketplaces
+├── App.jsx                 # Router + auth gate (muestra Login o Layout)
 ├── api.js                  # Axios con baseURL /api
 ├── components/
-│   ├── Layout.jsx          # Nav + selector de marketplace
+│   ├── Layout.jsx          # Nav + selector de marketplace + botón logout
 │   ├── StatsCards.jsx      # Tarjetas dashboard
 │   ├── LogsPanel.jsx       # Panel de cambios de precio
 │   └── OfertasTable.jsx    # Tabla ofertas con edición inline, toggle activo, buybox
 └── pages/
+    ├── Login.jsx           # Formulario de login
     ├── Dashboard.jsx       # Stats + últimos cambios + botón ejecutar repricer
     ├── Ofertas.jsx         # Listado con filtros pill, buscador, ordenación
     ├── Historico.jsx       # Ejecuciones + historial de precios
@@ -74,8 +76,8 @@ Ejecuta cada 15 minutos para cada marketplace activo:
 
 - **Manual:** `POST /api/marketplaces/:id/sync`
 - **Automática:** Diaria a las 06:00 UTC (scheduler)
-- Solo sincroniza ofertas con stock > 0
-- Ofertas nuevas se crean con `activo=False`, precio_min=90%, precio_max=110%
+- Ofertas con stock 0 se eliminan de la BD al sincronizar; no se crean nuevas sin stock
+- Ofertas nuevas (con stock > 0) se crean con `activo=False`, precio_min=90%, precio_max=110%
 
 ## Variables de entorno
 
@@ -85,10 +87,25 @@ Ejecuta cada 15 minutos para cada marketplace activo:
 | `SECRET_KEY` | Flask session | `dev-secret-key` |
 | `FERNET_KEY` | Cifrado API keys | Auto-generado |
 | `ENABLE_SCHEDULER` | Activa scheduler (true/1/yes) | No activo |
+| `APP_USERNAME` | Usuario para login | `admin` |
+| `APP_PASSWORD` | Contraseña para login (**requerida**) | — |
 
-En Railway: `ENABLE_SCHEDULER=true` es necesario para que el repricer y sync automático funcionen.
+En Railway: `ENABLE_SCHEDULER=true` es necesario para que el repricer y sync automático funcionen. `APP_PASSWORD` es obligatoria para que el login funcione.
+
+## Autenticación
+
+Login con formulario, sesión Flask con cookie. Credenciales configuradas via `APP_USERNAME` y `APP_PASSWORD`.
+
+- `before_request` en app.py protege todas las rutas `/api/*` excepto `/api/auth/*`
+- Frontend: App.jsx comprueba `/api/auth/me` al montar; si 401, muestra página de Login
+- Layout incluye botón "Salir" que llama a `/api/auth/logout`
 
 ## API endpoints
+
+### Auth `/api/auth`
+- `POST /login` — Login (body: `username`, `password`), crea sesión
+- `POST /logout` — Cierra sesión
+- `GET /me` — Devuelve usuario actual o 401
 
 ### Marketplaces `/api/marketplaces`
 - `GET /` — Listar
@@ -133,6 +150,7 @@ Endpoints Mirakl usados:
 - Ofertas: ordenadas activas primero, filtros pill (Todas/Activas/Sin buybox), buscador por nombre/SKU/EAN/offer ID/marketplace
 - Al guardar precio_min/max, el backend ajusta automáticamente precio_actual si queda fuera de rango
 - Buybox se muestra como punto verde/rojo
+- Timestamps se almacenan en UTC y se envían con sufijo `Z` para que el navegador los convierta a hora local
 
 ## Deploy
 

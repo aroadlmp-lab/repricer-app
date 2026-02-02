@@ -3,7 +3,7 @@ import api from '../api'
 
 export default function Marketplaces({ onRefresh }) {
   const [items, setItems] = useState([])
-  const [form, setForm] = useState({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '' })
+  const [form, setForm] = useState({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '' })
   const [editingId, setEditingId] = useState(null)
   const [testResult, setTestResult] = useState({})
   const [syncResult, setSyncResult] = useState({})
@@ -19,7 +19,7 @@ export default function Marketplaces({ onRefresh }) {
     } else {
       await api.post('/marketplaces', form)
     }
-    setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '' })
+    setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '' })
     setEditingId(null)
     load()
     onRefresh()
@@ -27,7 +27,7 @@ export default function Marketplaces({ onRefresh }) {
 
   const startEdit = (mp) => {
     setEditingId(mp.id)
-    setForm({ nombre: mp.nombre, url_api: mp.url_api, api_key: '', shop_id: mp.shop_id || '', shop_name: mp.shop_name || '' })
+    setForm({ nombre: mp.nombre, url_api: mp.url_api, api_key: '', shop_id: mp.shop_id || '', shop_name: mp.shop_name || '', channel_code: mp.channel_code || '' })
   }
 
   const testConnection = async (id) => {
@@ -74,13 +74,15 @@ export default function Marketplaces({ onRefresh }) {
           <input placeholder="Shop ID" value={form.shop_id} onChange={e => setForm({ ...form, shop_id: e.target.value })}
             className="border rounded px-3 py-2 text-sm" />
           <input placeholder="Nombre tienda en marketplace (ej: iRenovo)" value={form.shop_name} onChange={e => setForm({ ...form, shop_name: e.target.value })}
-            className="border rounded px-3 py-2 text-sm col-span-2" />
+            className="border rounded px-3 py-2 text-sm" />
+          <input placeholder="Channel code (ej: ES_B2C, B2C)" value={form.channel_code} onChange={e => setForm({ ...form, channel_code: e.target.value })}
+            className="border rounded px-3 py-2 text-sm" />
         </div>
         <div className="flex gap-2">
           <button type="submit" className="bg-gray-900 text-white px-4 py-2 rounded text-sm">
             {editingId ? 'Actualizar' : 'Crear'}
           </button>
-          {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '' }) }}
+          {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '' }) }}
             className="text-gray-500 text-sm">Cancelar</button>}
         </div>
       </form>
@@ -90,7 +92,7 @@ export default function Marketplaces({ onRefresh }) {
           <div key={mp.id} className="px-4 py-3 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">{mp.nombre}</p>
-              <p className="text-xs text-gray-500">{mp.url_api} &middot; {mp.tipo}</p>
+              <p className="text-xs text-gray-500">{mp.url_api} &middot; {mp.tipo}{mp.channel_code ? ` · ${mp.channel_code}` : ''}</p>
             </div>
             <div className="flex items-center gap-3">
               {testResult[mp.id] && (

@@ -79,9 +79,13 @@ def _add_missing_columns():
     columns = [c['name'] for c in inspector.get_columns('ofertas')]
     if 'product_sku' not in columns:
         db.session.execute(text('ALTER TABLE ofertas ADD COLUMN product_sku VARCHAR(100)'))
+    if 'state_code' not in columns:
+        db.session.execute(text('ALTER TABLE ofertas ADD COLUMN state_code VARCHAR(20)'))
     mp_columns = [c['name'] for c in inspector.get_columns('marketplaces')]
     if 'shop_name' not in mp_columns:
         db.session.execute(text('ALTER TABLE marketplaces ADD COLUMN shop_name VARCHAR(100)'))
+    if 'channel_code' not in mp_columns:
+        db.session.execute(text('ALTER TABLE marketplaces ADD COLUMN channel_code VARCHAR(20)'))
     db.session.commit()
 
 
