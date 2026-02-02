@@ -45,7 +45,7 @@ class MiraklClient(MarketplaceClient):
                 for o in offers:
                     # Filter by channel if configured
                     if self.channel_code:
-                        channels = [ch.get('code', '') for ch in o.get('channels', [])]
+                        channels = o.get('channels', [])
                         if self.channel_code not in channels:
                             continue
 
@@ -54,13 +54,12 @@ class MiraklClient(MarketplaceClient):
                     if self.channel_code and o.get('all_prices'):
                         for ap in o['all_prices']:
                             if ap.get('channel_code') == self.channel_code:
-                                price = float(ap.get('unit_origin_price', ap.get('price', price)))
+                                price = float(ap.get('price', price))
                                 break
                         else:
-                            # Fallback: entry with channel_code=None (default price)
                             for ap in o['all_prices']:
                                 if ap.get('channel_code') is None:
-                                    price = float(ap.get('unit_origin_price', ap.get('price', price)))
+                                    price = float(ap.get('price', price))
                                     break
 
                     all_offers.append({
@@ -70,7 +69,7 @@ class MiraklClient(MarketplaceClient):
                         'product_title': o.get('product_title', o.get('description', '')),
                         'price': price,
                         'stock': int(o.get('quantity', 0)),
-                        'state_code': o.get('offer_state_code', ''),
+                        'state_code': o.get('state_code', o.get('offer_state_code', '')),
                         'ean': o.get('product_references', [{}])[0].get('reference', '') if o.get('product_references') else '',
                     })
                 if len(offers) < 100:
@@ -103,12 +102,12 @@ class MiraklClient(MarketplaceClient):
                     if self.channel_code and offer.get('all_prices'):
                         for ap in offer['all_prices']:
                             if ap.get('channel_code') == self.channel_code:
-                                price = float(ap.get('unit_origin_price', ap.get('price', price)))
+                                price = float(ap.get('price', price))
                                 break
                         else:
                             for ap in offer['all_prices']:
                                 if ap.get('channel_code') is None:
-                                    price = float(ap.get('unit_origin_price', ap.get('price', price)))
+                                    price = float(ap.get('price', price))
                                     break
 
                     s_name = offer.get('shop_name', '')
