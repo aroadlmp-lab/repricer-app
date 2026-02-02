@@ -13,13 +13,29 @@ def sync_marketplace(mp):
     if not ofertas_api:
         return None
 
-    # Solo sincronizar ofertas con stock
-    ofertas_api = [o for o in ofertas_api if o.get('stock', 0) > 0]
-
     nuevas = 0
     actualizadas = 0
+    ignoradas = 0
 
     for o in ofertas_api:
+        stock = int(o.get('stock', 0))
+        p_sku = o.get('product_id', '') or o.get('product_sku', '')
+
+        oferta = Oferta.query.filter_by(
+            marketplace_id=mp.id,
+            offer_id_externo=o['offer_id']
+        ).first()
+
+        # Si stock es 0: actualizar stock si ya existe, pero no crear nueva
+        if stock <= 0:
+            if oferta:
+                oferta.stock = 0
+                oferta.product_sku = p_sku
+                actualizadas += 1
+            else:
+                ignoradas += 1
+            continue
+
         producto = Producto.query.filter_by(sku=o['sku']).first()
         if not producto:
             producto = Producto(
@@ -31,16 +47,9 @@ def sync_marketplace(mp):
             db.session.add(producto)
             db.session.flush()
 
-        oferta = Oferta.query.filter_by(
-            marketplace_id=mp.id,
-            offer_id_externo=o['offer_id']
-        ).first()
-
-        p_sku = o.get('product_id', '') or o.get('product_sku', '')
-
         if oferta:
             oferta.precio_actual = o['price']
-            oferta.stock = o['stock']
+            oferta.stock = stock
             oferta.product_sku = p_sku
             actualizadas += 1
         else:
@@ -52,7 +61,7 @@ def sync_marketplace(mp):
                 precio_actual=o['price'],
                 precio_min=round(o['price'] * 0.90, 2),
                 precio_max=round(o['price'] * 1.10, 2),
-                stock=o['stock'],
+                stock=stock,
                 tiene_buybox=False,
                 activo=False,
             )
@@ -64,6 +73,7 @@ def sync_marketplace(mp):
         'ofertas_api': len(ofertas_api),
         'nuevas': nuevas,
         'actualizadas': actualizadas,
+        'ignoradas_sin_stock': ignoradas,
     }
 
 
