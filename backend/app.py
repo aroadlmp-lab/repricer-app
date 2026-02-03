@@ -86,6 +86,11 @@ def _add_missing_columns():
         db.session.execute(text('ALTER TABLE marketplaces ADD COLUMN shop_name VARCHAR(100)'))
     if 'channel_code' not in mp_columns:
         db.session.execute(text('ALTER TABLE marketplaces ADD COLUMN channel_code VARCHAR(20)'))
+    # Clean orphan historico_precios records (oferta was deleted)
+    db.session.execute(text('''
+        DELETE FROM historico_precios
+        WHERE oferta_id NOT IN (SELECT id FROM ofertas)
+    '''))
     db.session.commit()
 
 

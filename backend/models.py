@@ -75,7 +75,8 @@ class Oferta(db.Model):
                            onupdate=lambda: datetime.now(timezone.utc))
 
     historico = db.relationship('HistoricoPrecios', backref='oferta', lazy='dynamic',
-                                order_by='HistoricoPrecios.created_at.desc()')
+                                order_by='HistoricoPrecios.created_at.desc()',
+                                cascade='all, delete-orphan')
 
     def to_dict(self):
         return {
