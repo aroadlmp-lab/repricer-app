@@ -45,18 +45,18 @@ frontend/src/
     ├── Dashboard.jsx       # Stats + últimos cambios + botón ejecutar repricer
     ├── Ofertas.jsx         # Listado con filtros pill, buscador, ordenación
     ├── Historico.jsx       # Ejecuciones + historial de precios
-    └── Marketplaces.jsx    # Config marketplaces (API key, shop_id, shop_name, sync, test)
+    └── Marketplaces.jsx    # Config marketplaces (API key, shop_id, shop_name, channel_code, sync, test)
 ```
 
 ## Modelos de datos
 
-- **Marketplace** — nombre, tipo, url_api, api_key_encrypted, shop_id, shop_name, activo
+- **Marketplace** — nombre, tipo, url_api, api_key_encrypted, shop_id, shop_name, channel_code, activo
 - **Producto** — sku (unique), ean, nombre, marca
-- **Oferta** — marketplace_id, producto_id, offer_id_externo, product_sku, precio_actual, precio_min, precio_max, stock, tiene_buybox, activo
+- **Oferta** — marketplace_id, producto_id, offer_id_externo, product_sku, precio_actual, precio_min, precio_max, stock, state_code, tiene_buybox, activo
 - **HistoricoPrecios** — oferta_id, precio_anterior, precio_nuevo, motivo, tenia_buybox
 - **Ejecucion** — marketplace_id, estado (ok/error), ofertas_procesadas, cambios_realizados, errores
 
-Relaciones: Marketplace → [Oferta, Ejecucion], Producto → [Oferta], Oferta → [HistoricoPrecios]
+Relaciones: Marketplace → [Oferta, Ejecucion], Producto → [Oferta], Oferta → [HistoricoPrecios (cascade delete)]
 
 ## Lógica de repricing
 
@@ -65,19 +65,21 @@ Ejecuta cada 15 minutos para cada marketplace activo:
 1. Obtiene ofertas activas con stock > 0
 2. Para cada oferta, llama a P11 (`GET /api/products/offers`) con `product_sku`
 3. Identifica ofertas propias por `shop_name` (campo `is_mine` en all_offers)
-4. Calcula nuevo precio:
+4. Filtra competidores por mismo `state_code` (estado de reacondicionado) si la oferta tiene uno
+5. Calcula nuevo precio:
    - **Sin buybox:** bajar a `mejor_precio_competidor - 0.01` (excluyendo ofertas propias), respetando `precio_min`
    - **Con buybox:** subir hasta `siguiente_competidor - 0.01`, respetando `precio_max`. Si no hay competidor por encima, sube 0.01
-5. Actualiza precio vía OF24 (`POST /api/offers`) enviando `shop_sku`, `price`, `quantity`
-6. Actualiza `tiene_buybox` en cada ejecución (no solo al cambiar precio)
-7. Registra cambio en HistoricoPrecios y crea Ejecucion
+6. Actualiza precio vía OF24 (`POST /api/offers`): si hay `channel_code`, envía `all_prices` con precio por canal; si no, envía `price` plano
+7. Actualiza `tiene_buybox` en cada ejecución (no solo al cambiar precio)
+8. Registra cambio en HistoricoPrecios y crea Ejecucion
 
 ## Sincronización
 
 - **Manual:** `POST /api/marketplaces/:id/sync`
 - **Automática:** Diaria a las 06:00 UTC (scheduler)
-- Ofertas con stock 0 se eliminan de la BD al sincronizar; no se crean nuevas sin stock
+- Ofertas con stock 0 se eliminan de la BD al sincronizar (junto con su histórico de precios); no se crean nuevas sin stock
 - Ofertas nuevas (con stock > 0) se crean con `activo=False`, precio_min=90%, precio_max=110%
+- Al sincronizar se guarda el `state_code` (estado de reacondicionado) de cada oferta
 
 ## Variables de entorno
 
@@ -137,12 +139,12 @@ Login con formulario, sesión Flask con cookie. Credenciales configuradas via `A
 
 ## Cliente Mirakl
 
-`clients/mirakl.py` — Si `api_key` es None, entra en **mock mode** (datos ficticios, sin llamadas reales).
+`clients/mirakl.py` — Si `api_key` es None, entra en **mock mode** (datos ficticios, sin llamadas reales). Acepta `channel_code` opcional para soporte multi-canal.
 
 Endpoints Mirakl usados:
-- `GET /api/offers` (paginado, max=100) — Listado de ofertas propias
-- `GET /api/products/offers` (P11) — Ofertas de todos los vendedores por producto
-- `POST /api/offers` (OF24) — Actualización de precio
+- `GET /api/offers` (paginado, max=100) — Listado de ofertas propias. Si `channel_code` está configurado, filtra ofertas por canal (campo `channels[]` es array de strings) y extrae precio del canal desde `all_prices`
+- `GET /api/products/offers` (P11) — Ofertas de todos los vendedores por producto. Extrae precio del canal si `channel_code` está configurado
+- `POST /api/offers` (OF24) — Actualización de precio. Si `channel_code` está configurado, envía `all_prices: [{channel_code, unit_origin_price}]` en vez de `price` plano
 
 ## Frontend
 
@@ -161,4 +163,6 @@ Railway despliega automáticamente al hacer `git push origin main`. El build eje
 - `shop_name` en Marketplace debe coincidir exactamente con el nombre de tu tienda en Mirakl para que la identificación de ofertas propias funcione
 - El repricer excluye ofertas propias al calcular precios (evita autocompetencia cuando hay varias unidades)
 - `product_sku` en Oferta es el ID de producto en Mirakl (necesario para P11), distinto del SKU del producto
-- Las migraciones manuales en `_add_missing_columns()` añaden columnas si no existen (product_sku, shop_name)
+- Las migraciones manuales en `_add_missing_columns()` añaden columnas si no existen (product_sku, shop_name, channel_code, state_code) y limpian registros huérfanos de historico_precios
+- `channel_code` en Marketplace permite que dos marketplaces compartan la misma API pero gestionen precios por canal (ej: Pixmania ES con `ES_B2C`, Pixmania FR con `B2C`)
+- `state_code` en Oferta indica el estado de reacondicionado del producto; el repricer solo compara contra competidores con el mismo state_code
