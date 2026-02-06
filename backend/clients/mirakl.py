@@ -149,12 +149,11 @@ class MiraklClient(MarketplaceClient):
         try:
             offer_data = {
                 'shop_sku': shop_sku,
+                'price': price,  # Always required by Mirakl
             }
-            # Use all_prices for channel-specific pricing, otherwise flat price
+            # Add channel-specific price if configured
             if self.channel_code:
                 offer_data['all_prices'] = [{'channel_code': self.channel_code, 'unit_origin_price': price}]
-            else:
-                offer_data['price'] = price
             # Solo incluir quantity si lo tenemos
             if quantity is not None:
                 offer_data['quantity'] = quantity
