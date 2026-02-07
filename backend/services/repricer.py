@@ -69,7 +69,6 @@ def _execute_repricer():
                             shop_sku = oferta.producto.sku
                         result = client.update_price(
                             offer_id, nuevo_precio, shop_sku,
-                            quantity=oferta.stock,
                         )
                         if result.get('success'):
                             motivo = _generar_motivo(oferta, bb_info, nuevo_precio)
