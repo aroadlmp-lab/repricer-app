@@ -69,7 +69,7 @@ Ejecuta cada 15 minutos para cada marketplace activo:
 5. Calcula nuevo precio:
    - **Sin buybox:** bajar a `mejor_precio_competidor - 0.01` (excluyendo ofertas propias), respetando `precio_min`
    - **Con buybox:** subir hasta `siguiente_competidor - 0.01`, respetando `precio_max`. Si no hay competidor por encima, sube 0.01
-6. Actualiza precio vía OF24 (`POST /api/offers`): si hay `channel_code`, envía `all_prices` con precio por canal; si no, envía `price` plano
+6. Actualiza **solo precio** vía OF24 (`POST /api/offers`): envía `price` (obligatorio) + `all_prices` si hay `channel_code`. **Nunca envía quantity** para no sobreescribir el stock real de Mirakl
 7. Actualiza `tiene_buybox` en cada ejecución (no solo al cambiar precio)
 8. Registra cambio en HistoricoPrecios y crea Ejecucion
 
@@ -144,7 +144,7 @@ Login con formulario, sesión Flask con cookie. Credenciales configuradas via `A
 Endpoints Mirakl usados:
 - `GET /api/offers` (paginado, max=100) — Listado de ofertas propias. Si `channel_code` está configurado, filtra ofertas por canal (campo `channels[]` es array de strings) y extrae precio del canal desde `all_prices`
 - `GET /api/products/offers` (P11) — Ofertas de todos los vendedores por producto. Extrae precio del canal si `channel_code` está configurado
-- `POST /api/offers` (OF24) — Actualización de precio. Si `channel_code` está configurado, envía `all_prices: [{channel_code, unit_origin_price}]` en vez de `price` plano
+- `POST /api/offers` (OF24) — Actualización de precio. Siempre envía `price` (obligatorio) + `all_prices` si `channel_code` está configurado. **No envía quantity** para evitar sobreescribir stock
 
 ## Frontend
 
@@ -166,3 +166,4 @@ Railway despliega automáticamente al hacer `git push origin main`. El build eje
 - Las migraciones manuales en `_add_missing_columns()` añaden columnas si no existen (product_sku, shop_name, channel_code, state_code) y limpian registros huérfanos de historico_precios
 - `channel_code` en Marketplace permite que dos marketplaces compartan la misma API pero gestionen precios por canal (ej: Pixmania ES con `ES_B2C`, Pixmania FR con `B2C`)
 - `state_code` en Oferta indica el estado de reacondicionado del producto; el repricer solo compara contra competidores con el mismo state_code
+- **IMPORTANTE:** El repricer nunca modifica el stock — solo actualiza precios. El stock lo gestiona Mirakl/ERP
