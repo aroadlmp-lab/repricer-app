@@ -166,5 +166,7 @@ Railway despliega automáticamente al hacer `git push origin main`. El build eje
 - Las migraciones manuales en `_add_missing_columns()` añaden columnas si no existen (product_sku, shop_name, channel_code, state_code) y limpian registros huérfanos de historico_precios
 - `channel_code` en Marketplace permite que dos marketplaces compartan la misma API pero gestionen precios por canal (ej: Pixmania ES con `ES_B2C`, Pixmania FR con `B2C`)
 - `state_code` en Oferta indica el estado de reacondicionado del producto; el repricer solo compara contra competidores con el mismo state_code
-- **IMPORTANTE:** El repricer nunca modifica el stock — solo actualiza precios. El stock lo gestiona Mirakl/ERP
-- Los logs de Railway muestran `UPDATE_PRICE:` con el payload exacto enviado a Mirakl para debugging
+- **IMPORTANTE:** El repricer nunca modifica el stock — solo actualiza precios. El parámetro `quantity` fue eliminado completamente de `update_price()` para evitar sobreescribir el stock real de Mirakl
+- Los logs de Railway muestran `UPDATE_PRICE:` con el payload exacto enviado a Mirakl (solo `shop_sku` y `price`, nunca `quantity`)
+- Los SKUs pueden contener comas (ej: `#RN0007,`, `#RN0007,,`) — esto es intencional para diferenciar estados de reacondicionado
+- El logging está configurado en `app.py` para enviar a stdout y ser visible en Railway Deploy Logs
