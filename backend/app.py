@@ -99,6 +99,10 @@ def _add_missing_columns():
         DELETE FROM historico_precios
         WHERE oferta_id NOT IN (SELECT id FROM ofertas)
     '''))
+    # Clean SKUs with trailing commas
+    db.session.execute(text('''
+        UPDATE productos SET sku = RTRIM(sku, ',') WHERE sku LIKE '%,'
+    '''))
     db.session.commit()
 
 
