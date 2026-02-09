@@ -65,11 +65,10 @@ def test_update(oferta_id):
     shop_sku = oferta.producto.sku if oferta.producto else ''
     offer_id = oferta.offer_id_externo or str(oferta.id)
 
-    result = client.update_price(offer_id, oferta.precio_actual, shop_sku, quantity=oferta.stock)
+    result = client.update_price(offer_id, oferta.precio_actual, shop_sku)
     return jsonify({
         'offer_id': offer_id,
         'shop_sku': shop_sku,
         'precio': oferta.precio_actual,
-        'stock': oferta.stock,
         'result': result,
     })
