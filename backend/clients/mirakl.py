@@ -144,15 +144,39 @@ class MiraklClient(MarketplaceClient):
             return {'has_buybox': False, 'best_price': 0, 'my_price': 0, 'competitors': 0,
                     'all_offers': [], 'error': str(e)}
 
+    def get_offer_quantity(self, shop_sku: str) -> Optional[int]:
+        """Get current quantity of an offer from Mirakl API."""
+        if self.mock_mode:
+            return 1
+        try:
+            r = requests.get(f'{self.url_api}/api/offers', headers=self._headers(),
+                             params={'shop_skus': shop_sku, 'max': 1}, timeout=10)
+            r.raise_for_status()
+            data = r.json()
+            offers = data.get('offers', [])
+            if offers:
+                return int(offers[0].get('quantity', 0))
+            return None
+        except Exception:
+            return None
+
     def update_price(self, offer_id: str, price: float, shop_sku: str = '') -> dict:
-        """Actualiza precio via OF24 (POST /api/offers). Solo envía price, NUNCA quantity."""
+        """Actualiza precio via OF24 (POST /api/offers). Incluye quantity actual para no resetear stock."""
         if self.mock_mode:
             return {'success': True}
         try:
+            # Get current quantity from Mirakl to avoid resetting it
+            current_quantity = self.get_offer_quantity(shop_sku)
+
             offer_data = {
                 'shop_sku': shop_sku,
                 'price': price,  # Always required by Mirakl
             }
+
+            # Include quantity to prevent Mirakl from resetting it to 0
+            if current_quantity is not None:
+                offer_data['quantity'] = current_quantity
+
             # Add channel-specific price if configured
             if self.channel_code:
                 offer_data['all_prices'] = [{'channel_code': self.channel_code, 'unit_origin_price': price}]
