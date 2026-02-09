@@ -168,14 +168,16 @@ class MiraklClient(MarketplaceClient):
             # Get current quantity from Mirakl to avoid resetting it
             current_quantity = self.get_offer_quantity(shop_sku)
 
+            # Skip update if offer has no stock in Mirakl (avoid sending quantity 0)
+            if current_quantity is None or current_quantity <= 0:
+                logger.info(f'SKIP_UPDATE: shop_sku={shop_sku}, reason=no stock in Mirakl (quantity={current_quantity})')
+                return {'success': True, 'skipped': True, 'reason': 'no stock in Mirakl'}
+
             offer_data = {
                 'shop_sku': shop_sku,
                 'price': price,  # Always required by Mirakl
+                'quantity': current_quantity,
             }
-
-            # Include quantity to prevent Mirakl from resetting it to 0
-            if current_quantity is not None:
-                offer_data['quantity'] = current_quantity
 
             # Add channel-specific price if configured
             if self.channel_code:
@@ -184,7 +186,7 @@ class MiraklClient(MarketplaceClient):
             payload = {'offers': [offer_data]}
 
             # Log exactamente lo que enviamos
-            logger.info(f'UPDATE_PRICE: shop_sku={shop_sku}, payload={payload}')
+            logger.info(f'UPDATE_PRICE: shop_sku={shop_sku}, quantity={current_quantity}, payload={payload}')
 
             r = requests.post(f'{self.url_api}/api/offers', headers=self._headers(),
                               json=payload, timeout=10)
