@@ -20,8 +20,7 @@ def sync_marketplace(mp):
     for o in ofertas_api:
         stock = int(o.get('stock', 0))
         p_sku = o.get('product_id', '') or o.get('product_sku', '')
-        # Clean SKU: remove trailing commas and whitespace
-        sku = o.get('sku', '').strip().rstrip(',')
+        sku = o.get('sku', '')
 
         oferta = Oferta.query.filter_by(
             marketplace_id=mp.id,
