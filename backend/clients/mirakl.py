@@ -141,9 +141,8 @@ class MiraklClient(MarketplaceClient):
             return {'has_buybox': False, 'best_price': 0, 'my_price': 0, 'competitors': 0,
                     'all_offers': [], 'error': str(e)}
 
-    def update_price(self, offer_id: str, price: float, shop_sku: str = '',
-                     quantity: int = None) -> dict:
-        """Actualiza precio via OF24 (POST /api/offers). Solo envía price + campos obligatorios."""
+    def update_price(self, offer_id: str, price: float, shop_sku: str = '') -> dict:
+        """Actualiza precio via OF24 (POST /api/offers). Solo envía price, NUNCA quantity."""
         if self.mock_mode:
             return {'success': True}
         try:
@@ -154,9 +153,6 @@ class MiraklClient(MarketplaceClient):
             # Add channel-specific price if configured
             if self.channel_code:
                 offer_data['all_prices'] = [{'channel_code': self.channel_code, 'unit_origin_price': price}]
-            # Solo incluir quantity si lo tenemos
-            if quantity is not None:
-                offer_data['quantity'] = quantity
 
             payload = {'offers': [offer_data]}
             r = requests.post(f'{self.url_api}/api/offers', headers=self._headers(),
