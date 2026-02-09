@@ -1,8 +1,16 @@
 import os
 import logging
+import sys
 from flask import Flask, send_from_directory, session, jsonify, request
 from flask_cors import CORS
 from extensions import db, migrate
+
+# Configure logging to stdout for Railway
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist')
 logger = logging.getLogger(__name__)
