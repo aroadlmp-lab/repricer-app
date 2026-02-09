@@ -13,4 +13,4 @@ COPY backend/ ./backend/
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 WORKDIR /app/backend
 EXPOSE 8080
-CMD ["gunicorn", "app:create_app()", "--bind", "0.0.0.0:8080"]
+CMD ["gunicorn", "app:create_app()", "--bind", "0.0.0.0:8080", "--timeout", "300"]
