@@ -139,12 +139,12 @@ Login con formulario, sesión Flask con cookie. Credenciales configuradas via `A
 
 ## Cliente Mirakl
 
-`clients/mirakl.py` — Si `api_key` es None, entra en **mock mode** (datos ficticios, sin llamadas reales). Acepta `channel_code` opcional para soporte multi-canal.
+`clients/mirakl.py` — Si `api_key` es None, entra en **mock mode** (datos ficticios, sin llamadas reales). Acepta `channel_code` opcional para soporte multi-canal. Incluye logging de cada update para debug.
 
 Endpoints Mirakl usados:
 - `GET /api/offers` (paginado, max=100) — Listado de ofertas propias. Si `channel_code` está configurado, filtra ofertas por canal (campo `channels[]` es array de strings) y extrae precio del canal desde `all_prices`
 - `GET /api/products/offers` (P11) — Ofertas de todos los vendedores por producto. Extrae precio del canal si `channel_code` está configurado
-- `POST /api/offers` (OF24) — Actualización de precio. Siempre envía `price` (obligatorio) + `all_prices` si `channel_code` está configurado. **No envía quantity** para evitar sobreescribir stock
+- `POST /api/offers` (OF24) — Actualización de precio. Siempre envía `price` (obligatorio) + `all_prices` si `channel_code` está configurado. **Nunca envía quantity** — el parámetro fue eliminado completamente de la función para evitar sobreescribir stock
 
 ## Frontend
 
@@ -167,3 +167,4 @@ Railway despliega automáticamente al hacer `git push origin main`. El build eje
 - `channel_code` en Marketplace permite que dos marketplaces compartan la misma API pero gestionen precios por canal (ej: Pixmania ES con `ES_B2C`, Pixmania FR con `B2C`)
 - `state_code` en Oferta indica el estado de reacondicionado del producto; el repricer solo compara contra competidores con el mismo state_code
 - **IMPORTANTE:** El repricer nunca modifica el stock — solo actualiza precios. El stock lo gestiona Mirakl/ERP
+- Los logs de Railway muestran `UPDATE_PRICE:` con el payload exacto enviado a Mirakl para debugging
