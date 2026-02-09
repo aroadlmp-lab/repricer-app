@@ -1,7 +1,10 @@
 import random
+import logging
 from typing import Optional, List
 import requests
 from .base import MarketplaceClient
+
+logger = logging.getLogger(__name__)
 
 
 class MiraklClient(MarketplaceClient):
@@ -155,8 +158,14 @@ class MiraklClient(MarketplaceClient):
                 offer_data['all_prices'] = [{'channel_code': self.channel_code, 'unit_origin_price': price}]
 
             payload = {'offers': [offer_data]}
+
+            # Log exactamente lo que enviamos
+            logger.info(f'UPDATE_PRICE: shop_sku={shop_sku}, payload={payload}')
+
             r = requests.post(f'{self.url_api}/api/offers', headers=self._headers(),
                               json=payload, timeout=10)
+
+            logger.info(f'UPDATE_PRICE response: status={r.status_code}, body={r.text[:200]}')
 
             if r.status_code in (200, 201, 204):
                 return {'success': True, 'status_code': r.status_code, 'sent': offer_data}
