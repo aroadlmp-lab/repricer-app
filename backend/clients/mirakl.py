@@ -144,6 +144,18 @@ class MiraklClient(MarketplaceClient):
             return {'has_buybox': False, 'best_price': 0, 'my_price': 0, 'competitors': 0,
                     'all_offers': [], 'error': str(e)}
 
+    def get_import_status(self, import_id: int) -> dict:
+        """Get status of an offer import (OF73)."""
+        if self.mock_mode:
+            return {'status': 'mock'}
+        try:
+            r = requests.get(f'{self.url_api}/api/offers/imports/{import_id}',
+                             headers=self._headers(), timeout=10)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            return {'error': str(e)}
+
     def get_offer_quantity(self, shop_sku: str) -> Optional[int]:
         """Get current quantity of an offer from Mirakl API."""
         if self.mock_mode:

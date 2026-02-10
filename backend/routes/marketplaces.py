@@ -100,3 +100,14 @@ def sincronizar(id):
     if result is None:
         return jsonify({'status': 'error', 'message': 'No se pudieron obtener ofertas de la API'}), 400
     return jsonify({'status': 'ok', **result})
+
+
+@bp.route('/<int:id>/import-status/<int:import_id>', methods=['GET'])
+def import_status(id, import_id):
+    """Check status of an offer import in Mirakl."""
+    mp = Marketplace.query.get_or_404(id)
+    client = get_client(mp)
+    if client.mock_mode:
+        return jsonify({'error': 'mock mode'})
+    result = client.get_import_status(import_id)
+    return jsonify(result)
