@@ -111,3 +111,29 @@ def import_status(id, import_id):
         return jsonify({'error': 'mock mode'})
     result = client.get_import_status(import_id)
     return jsonify(result)
+
+
+@bp.route('/<int:id>/find-sku/<string:sku>', methods=['GET'])
+def find_sku(id, sku):
+    """Debug: busca un SKU específico en todas las ofertas de Mirakl."""
+    mp = Marketplace.query.get_or_404(id)
+    client = get_client(mp)
+    if client.mock_mode:
+        return jsonify({'error': 'mock mode'})
+
+    # Fetch all offers (same as sync/repricer)
+    all_offers = client.get_offers()
+
+    # Build dict and find the SKU
+    sku_to_offer = {o['sku']: o for o in all_offers}
+    found = sku_to_offer.get(sku)
+
+    # Also search partial matches
+    partial_matches = [o for o in all_offers if sku.lower() in o['sku'].lower()]
+
+    return jsonify({
+        'search_sku': sku,
+        'total_offers_from_mirakl': len(all_offers),
+        'exact_match': found,
+        'partial_matches': partial_matches[:10],  # Limit to 10
+    })
