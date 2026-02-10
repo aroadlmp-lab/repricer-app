@@ -44,7 +44,7 @@ def _execute_repricer():
             # Fetch all offers from Mirakl to get current quantities (same as sync)
             mirakl_offers = client.get_offers()
             sku_to_quantity = {o['sku']: o['stock'] for o in mirakl_offers}
-            logger.info(f'REPRICER {mp.nombre}: fetched {len(mirakl_offers)} offers from Mirakl')
+            logger.info(f'REPRICER {mp.nombre}: fetched {len(mirakl_offers)} offers from Mirakl, channel_code={mp.channel_code}')
 
             ofertas = Oferta.query.filter_by(marketplace_id=mp.id, activo=True).filter(Oferta.stock > 0).all()
 
@@ -81,7 +81,7 @@ def _execute_repricer():
                         result = client.update_price(
                             offer_id, nuevo_precio, shop_sku, quantity=mirakl_quantity,
                         )
-                        if result.get('success'):
+                        if result.get('success') and not result.get('skipped'):
                             motivo = _generar_motivo(oferta, bb_info, nuevo_precio)
                             hist = HistoricoPrecios(
                                 oferta_id=oferta.id,
@@ -93,6 +93,8 @@ def _execute_repricer():
                             db.session.add(hist)
                             oferta.precio_actual = nuevo_precio
                             cambios += 1
+                        elif result.get('skipped'):
+                            logger.warning(f'Oferta {oferta.id} ({shop_sku}): skipped - {result.get("reason")}')
                         else:
                             errores_list.append(f'Oferta {oferta.id}: update failed: {result}')
                 except Exception as e:
