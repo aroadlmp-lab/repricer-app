@@ -205,14 +205,23 @@ class MiraklClient(MarketplaceClient):
 
             logger.info(f'UPDATE_PRICE response: status={r.status_code}, body={r.text[:200]}')
 
+            # Parse response to get import_id
+            import_id = None
+            try:
+                resp_json = r.json()
+                import_id = resp_json.get('import_id')
+            except:
+                resp_json = None
+
             if r.status_code in (200, 201, 204):
-                return {'success': True, 'status_code': r.status_code, 'sent': offer_data}
+                return {'success': True, 'status_code': r.status_code, 'sent': offer_data, 'import_id': import_id}
 
             return {
                 'success': False,
                 'status_code': r.status_code,
                 'body': r.text[:500],
                 'sent': offer_data,
+                'import_id': import_id,
             }
         except Exception as e:
             return {'success': False, 'error': str(e)}

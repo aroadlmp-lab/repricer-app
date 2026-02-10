@@ -72,3 +72,38 @@ def test_update(oferta_id):
         'precio': oferta.precio_actual,
         'result': result,
     })
+
+
+@bp.route('/test-update-debug/<int:oferta_id>', methods=['GET'])
+def test_update_debug(oferta_id):
+    """Prueba update_price y consulta OF73 para ver el estado de la importación."""
+    import time
+    oferta = Oferta.query.get_or_404(oferta_id)
+    mp = Marketplace.query.get_or_404(oferta.marketplace_id)
+    client = get_client(mp)
+    shop_sku = oferta.producto.sku if oferta.producto else ''
+    offer_id = oferta.offer_id_externo or str(oferta.id)
+
+    # 1. Hacer el update
+    update_result = client.update_price(offer_id, oferta.precio_actual, shop_sku)
+
+    # 2. Extraer import_id del result
+    import_id = update_result.get('import_id')
+    import_status = None
+
+    # 3. Si tenemos import_id, esperar un momento y consultar OF73
+    if import_id:
+        time.sleep(2)  # Dar tiempo a Mirakl para procesar
+        import_status = client.get_import_status(import_id)
+
+    return jsonify({
+        'oferta_id': oferta_id,
+        'offer_id_externo': offer_id,
+        'shop_sku': shop_sku,
+        'precio_enviado': oferta.precio_actual,
+        'marketplace': mp.nombre,
+        'channel_code': mp.channel_code,
+        'update_result': update_result,
+        'import_id': import_id,
+        'import_status': import_status,
+    })
