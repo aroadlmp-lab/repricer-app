@@ -62,17 +62,21 @@ Relaciones: Marketplace → [Oferta, Ejecucion], Producto → [Oferta], Oferta �
 
 Ejecuta cada 15 minutos para cada marketplace activo:
 
-1. Obtiene ofertas activas con stock > 0
-2. Para cada oferta, llama a P11 (`GET /api/products/offers`) con `product_sku`
-3. Identifica ofertas propias por `shop_name` (campo `is_mine` en all_offers)
-4. Filtra competidores por mismo `state_code` (estado de reacondicionado) si la oferta tiene uno
-5. Calcula nuevo precio:
+1. **Obtiene TODAS las ofertas de Mirakl** al inicio usando `get_offers()` (igual que el sync)
+2. Crea diccionario `{sku: quantity}` con los stocks reales de Mirakl
+3. Para cada oferta activa con stock > 0 en la BD:
+   - Llama a P11 (`GET /api/products/offers`) con `product_sku` para obtener competidores
+   - Identifica ofertas propias por `shop_name` (campo `is_mine` en all_offers)
+   - Filtra competidores por mismo `state_code` (estado de reacondicionado) si la oferta tiene uno
+4. Calcula nuevo precio:
    - **Sin buybox:** bajar a `mejor_precio_competidor - 0.01` (excluyendo ofertas propias), respetando `precio_min`
    - **Con buybox:** subir hasta `siguiente_competidor - 0.01`, respetando `precio_max`. Si no hay competidor por encima, sube 0.01
-6. Antes de actualizar, lee el `quantity` actual de Mirakl via `GET /api/offers?shop_skus=...`
-7. Actualiza vía OF24 (`POST /api/offers`): envía `price` + `quantity` (leído de Mirakl) + `all_prices` si hay `channel_code`
-8. Actualiza `tiene_buybox` en cada ejecución (no solo al cambiar precio)
-9. Registra cambio en HistoricoPrecios y crea Ejecucion
+5. Si hay cambio de precio:
+   - Busca el `quantity` real en el diccionario (obtenido en paso 1)
+   - Si quantity es 0 o no se encuentra, **salta el update** (evita modificar ofertas sin stock)
+   - Actualiza vía OF24 (`POST /api/offers`): envía `price` + `quantity` + `all_prices` si hay `channel_code`
+6. Actualiza `tiene_buybox` en cada ejecución (no solo al cambiar precio)
+7. Registra cambio en HistoricoPrecios y crea Ejecucion
 
 ## Sincronización
 
@@ -117,9 +121,10 @@ Login con formulario, sesión Flask con cookie. Credenciales configuradas via `A
 - `DELETE /:id` — Eliminar
 - `POST /:id/test` — Test conexión
 - `POST /:id/sync` — Sincronizar ofertas
-- `GET /:id/raw` — Debug: ofertas crudas de la API
+- `GET /:id/raw` — Debug: ofertas crudas de la API (primeras 2)
 - `GET /:id/rawp11/:product_id` — Debug: respuesta P11
 - `GET /:id/import-status/:import_id` — Debug: estado de importación OF73 (ver si Mirakl procesó el update)
+- `GET /:id/find-sku/:sku` — Debug: busca un SKU en todas las ofertas de Mirakl (muestra stock real)
 
 ### Ofertas `/api/ofertas`
 - `GET /` — Listar (filtro: `marketplace_id`)
@@ -137,17 +142,17 @@ Login con formulario, sesión Flask con cookie. Credenciales configuradas via `A
 ### Repricer `/api/repricer`
 - `POST /run` — Ejecutar manualmente
 - `GET /debug/:marketplace_id` — Debug buybox sin hacer cambios
-- `GET /test-update/:oferta_id` — Test update (envía precio actual)
+- `GET /test-update/:oferta_id` — Test update (envía precio actual, obtiene quantity de Mirakl)
+- `GET /test-update-debug/:oferta_id` — Test update completo con diagnóstico: muestra stock_db, stock_mirakl, import_id e import_status de Mirakl
 
 ## Cliente Mirakl
 
 `clients/mirakl.py` — Si `api_key` es None, entra en **mock mode** (datos ficticios, sin llamadas reales). Acepta `channel_code` opcional para soporte multi-canal. Incluye logging de cada update para debug.
 
 Endpoints Mirakl usados:
-- `GET /api/offers` (paginado, max=100) — Listado de ofertas propias. Si `channel_code` está configurado, filtra ofertas por canal (campo `channels[]` es array de strings) y extrae precio del canal desde `all_prices`
+- `GET /api/offers` (paginado, max=100) — Listado de ofertas propias. El repricer usa esto al inicio para obtener TODAS las ofertas con sus quantities reales. Si `channel_code` está configurado, filtra ofertas por canal (campo `channels[]` es array de strings) y extrae precio del canal desde `all_prices`
 - `GET /api/products/offers` (P11) — Ofertas de todos los vendedores por producto. Extrae precio del canal si `channel_code` está configurado
-- `GET /api/offers?shop_skus=...` — Obtener quantity actual de una oferta antes de actualizar
-- `POST /api/offers` (OF24) — Actualización de precio. Envía `price` + `quantity` (leído de Mirakl) + `all_prices` si `channel_code` está configurado
+- `POST /api/offers` (OF24) — Actualización de precio. Envía `price` + `quantity` (del diccionario obtenido al inicio) + `all_prices` si `channel_code` está configurado
 - `GET /api/offers/imports/:id` (OF73) — Estado de importación. Útil para debug cuando OF24 retorna 201 pero el precio no cambia
 
 ## Frontend
@@ -170,8 +175,9 @@ Railway despliega automáticamente al hacer `git push origin main`. El build eje
 - Las migraciones manuales en `_add_missing_columns()` añaden columnas si no existen (product_sku, shop_name, channel_code, state_code) y limpian registros huérfanos de historico_precios
 - `channel_code` en Marketplace permite que dos marketplaces compartan la misma API pero gestionen precios por canal (ej: Pixmania ES con `ES_B2C`, Pixmania FR con `B2C`)
 - `state_code` en Oferta indica el estado de reacondicionado del producto; el repricer solo compara contra competidores con el mismo state_code
-- **IMPORTANTE:** El repricer lee el `quantity` actual de Mirakl antes de cada update y lo incluye en el payload. Así no modifica el stock — solo lo preserva. Algunos marketplaces (Carrefour, Phonehouse) resetean `quantity` a 0 si no se incluye
-- Los logs de Railway muestran `UPDATE_PRICE:` con el payload exacto enviado a Mirakl (`shop_sku`, `price`, `quantity`)
+- **IMPORTANTE:** El repricer obtiene TODAS las ofertas de Mirakl al inicio (usando `get_offers()`, igual que el sync) y crea un diccionario `{sku: quantity}`. Para cada update, usa el quantity de ese diccionario. Si el SKU no se encuentra o tiene quantity=0, el update se salta. Esto evita modificar el stock y previene re-listar productos vendidos
+- Algunos marketplaces (Carrefour, Phonehouse) resetean `quantity` a 0 si no se incluye en el update, por eso siempre se envía
+- Los logs de Railway muestran `REPRICER {marketplace}: fetched X offers from Mirakl` al inicio y `UPDATE_PRICE:` con el payload exacto enviado
 - Gunicorn tiene timeout de 300s para permitir que el repricer procese muchas ofertas sin ser matado
 - Los SKUs pueden contener comas (ej: `#RN0007,`, `#RN0007,,`) — esto es intencional para diferenciar estados de reacondicionado
 - El logging está configurado en `app.py` para enviar a stdout y ser visible en Railway Deploy Logs
