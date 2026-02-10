@@ -119,6 +119,7 @@ Login con formulario, sesión Flask con cookie. Credenciales configuradas via `A
 - `POST /:id/sync` — Sincronizar ofertas
 - `GET /:id/raw` — Debug: ofertas crudas de la API
 - `GET /:id/rawp11/:product_id` — Debug: respuesta P11
+- `GET /:id/import-status/:import_id` — Debug: estado de importación OF73 (ver si Mirakl procesó el update)
 
 ### Ofertas `/api/ofertas`
 - `GET /` — Listar (filtro: `marketplace_id`)
@@ -147,6 +148,7 @@ Endpoints Mirakl usados:
 - `GET /api/products/offers` (P11) — Ofertas de todos los vendedores por producto. Extrae precio del canal si `channel_code` está configurado
 - `GET /api/offers?shop_skus=...` — Obtener quantity actual de una oferta antes de actualizar
 - `POST /api/offers` (OF24) — Actualización de precio. Envía `price` + `quantity` (leído de Mirakl) + `all_prices` si `channel_code` está configurado
+- `GET /api/offers/imports/:id` (OF73) — Estado de importación. Útil para debug cuando OF24 retorna 201 pero el precio no cambia
 
 ## Frontend
 
