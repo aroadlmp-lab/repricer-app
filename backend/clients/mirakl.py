@@ -195,7 +195,7 @@ class MiraklClient(MarketplaceClient):
             payload = {'offers': [offer_data]}
 
             # Log exactamente lo que enviamos
-            logger.info(f'UPDATE_PRICE: shop_sku={shop_sku}, quantity={current_quantity}, payload={payload}')
+            logger.info(f'UPDATE_PRICE: shop_sku={shop_sku}, quantity={quantity}, payload={payload}')
 
             r = requests.post(f'{self.url_api}/api/offers', headers=self._headers(),
                               json=payload, timeout=10)
