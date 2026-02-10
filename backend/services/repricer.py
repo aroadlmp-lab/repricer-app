@@ -28,6 +28,9 @@ def run_repricer(app=None):
 
 
 def _execute_repricer():
+    import logging
+    logger = logging.getLogger(__name__)
+
     marketplaces = Marketplace.query.filter_by(activo=True).all()
 
     for mp in marketplaces:
@@ -37,6 +40,12 @@ def _execute_repricer():
 
         try:
             client = get_client(mp)
+
+            # Fetch all offers from Mirakl to get current quantities (same as sync)
+            mirakl_offers = client.get_offers()
+            sku_to_quantity = {o['sku']: o['stock'] for o in mirakl_offers}
+            logger.info(f'REPRICER {mp.nombre}: fetched {len(mirakl_offers)} offers from Mirakl')
+
             ofertas = Oferta.query.filter_by(marketplace_id=mp.id, activo=True).filter(Oferta.stock > 0).all()
 
             for oferta in ofertas:
@@ -67,8 +76,10 @@ def _execute_repricer():
                         shop_sku = ''
                         if oferta.producto:
                             shop_sku = oferta.producto.sku
+                        # Use quantity from Mirakl (fetched at start), not from DB
+                        mirakl_quantity = sku_to_quantity.get(shop_sku, 0)
                         result = client.update_price(
-                            offer_id, nuevo_precio, shop_sku,
+                            offer_id, nuevo_precio, shop_sku, quantity=mirakl_quantity,
                         )
                         if result.get('success'):
                             motivo = _generar_motivo(oferta, bb_info, nuevo_precio)

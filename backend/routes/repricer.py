@@ -65,11 +65,18 @@ def test_update(oferta_id):
     shop_sku = oferta.producto.sku if oferta.producto else ''
     offer_id = oferta.offer_id_externo or str(oferta.id)
 
-    result = client.update_price(offer_id, oferta.precio_actual, shop_sku)
+    # Fetch all offers from Mirakl to get current quantity (like sync does)
+    mirakl_offers = client.get_offers()
+    sku_to_quantity = {o['sku']: o['stock'] for o in mirakl_offers}
+    mirakl_quantity = sku_to_quantity.get(shop_sku, 0)
+
+    result = client.update_price(offer_id, oferta.precio_actual, shop_sku, quantity=mirakl_quantity)
     return jsonify({
         'offer_id': offer_id,
         'shop_sku': shop_sku,
         'precio': oferta.precio_actual,
+        'stock_db': oferta.stock,
+        'stock_mirakl': mirakl_quantity,
         'result': result,
     })
 
@@ -84,8 +91,13 @@ def test_update_debug(oferta_id):
     shop_sku = oferta.producto.sku if oferta.producto else ''
     offer_id = oferta.offer_id_externo or str(oferta.id)
 
-    # 1. Hacer el update
-    update_result = client.update_price(offer_id, oferta.precio_actual, shop_sku)
+    # 0. Fetch all offers from Mirakl to get current quantity (like sync does)
+    mirakl_offers = client.get_offers()
+    sku_to_quantity = {o['sku']: o['stock'] for o in mirakl_offers}
+    mirakl_quantity = sku_to_quantity.get(shop_sku, 0)
+
+    # 1. Hacer el update con quantity de Mirakl
+    update_result = client.update_price(offer_id, oferta.precio_actual, shop_sku, quantity=mirakl_quantity)
 
     # 2. Extraer import_id del result
     import_id = update_result.get('import_id')
@@ -101,6 +113,8 @@ def test_update_debug(oferta_id):
         'offer_id_externo': offer_id,
         'shop_sku': shop_sku,
         'precio_enviado': oferta.precio_actual,
+        'stock_db': oferta.stock,
+        'stock_mirakl': mirakl_quantity,
         'marketplace': mp.nombre,
         'channel_code': mp.channel_code,
         'update_result': update_result,

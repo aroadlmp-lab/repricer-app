@@ -172,23 +172,20 @@ class MiraklClient(MarketplaceClient):
         except Exception:
             return None
 
-    def update_price(self, offer_id: str, price: float, shop_sku: str = '') -> dict:
-        """Actualiza precio via OF24 (POST /api/offers). Incluye quantity actual para no resetear stock."""
+    def update_price(self, offer_id: str, price: float, shop_sku: str = '', quantity: int = None) -> dict:
+        """Actualiza precio via OF24 (POST /api/offers). Incluye quantity para no resetear stock."""
         if self.mock_mode:
             return {'success': True}
         try:
-            # Get current quantity from Mirakl to avoid resetting it
-            current_quantity = self.get_offer_quantity(shop_sku)
-
-            # Skip update if offer has no stock in Mirakl (avoid sending quantity 0)
-            if current_quantity is None or current_quantity <= 0:
-                logger.info(f'SKIP_UPDATE: shop_sku={shop_sku}, reason=no stock in Mirakl (quantity={current_quantity})')
-                return {'success': True, 'skipped': True, 'reason': 'no stock in Mirakl'}
+            # Skip update if no quantity provided or quantity is 0
+            if quantity is None or quantity <= 0:
+                logger.info(f'SKIP_UPDATE: shop_sku={shop_sku}, reason=no stock (quantity={quantity})')
+                return {'success': True, 'skipped': True, 'reason': 'no stock'}
 
             offer_data = {
                 'shop_sku': shop_sku,
                 'price': price,  # Always required by Mirakl
-                'quantity': current_quantity,
+                'quantity': quantity,
             }
 
             # Add channel-specific price if configured
