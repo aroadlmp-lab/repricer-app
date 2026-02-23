@@ -89,11 +89,30 @@ class MiraklClient(MarketplaceClient):
             return self._mock_buybox(offer_id)
         if not product_sku:
             return {'has_buybox': False, 'best_price': 0, 'my_price': 0, 'competitors': 0, 'all_offers': []}
+        import time
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                r = requests.get(f'{self.url_api}/api/products/offers', headers=self._headers(),
+                                 params={'product_ids': product_sku}, timeout=15)
+                if r.status_code == 429:
+                    wait = int(r.headers.get('Retry-After', 5 * (attempt + 1)))
+                    logger.warning(f'P11 rate limit (429) for {product_sku}, waiting {wait}s (attempt {attempt+1}/{max_retries})')
+                    time.sleep(wait)
+                    continue
+                r.raise_for_status()
+                data = r.json()
+                break
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    return {'has_buybox': False, 'best_price': 0, 'my_price': 0, 'competitors': 0,
+                            'all_offers': [], 'error': str(e)}
+                time.sleep(3)
+                continue
+        else:
+            return {'has_buybox': False, 'best_price': 0, 'my_price': 0, 'competitors': 0,
+                    'all_offers': [], 'error': f'Rate limit tras {max_retries} intentos'}
         try:
-            r = requests.get(f'{self.url_api}/api/products/offers', headers=self._headers(),
-                             params={'product_ids': product_sku}, timeout=15)
-            r.raise_for_status()
-            data = r.json()
 
             all_product_offers = []
             my_price = 0

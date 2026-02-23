@@ -1,3 +1,4 @@
+import time
 from typing import Optional
 from datetime import datetime, timezone
 from extensions import db, decrypt_value
@@ -53,6 +54,7 @@ def _execute_repricer():
                 try:
                     offer_id = oferta.offer_id_externo or str(oferta.id)
                     product_sku = oferta.product_sku or ''
+                    time.sleep(0.3)  # Pausa entre llamadas P11 para no superar el rate limit
                     bb_info = client.get_buybox_info(offer_id, product_sku)
 
                     if bb_info.get('error'):
