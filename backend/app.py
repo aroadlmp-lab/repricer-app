@@ -65,17 +65,30 @@ def create_app():
 
 def _start_scheduler(app):
     from apscheduler.schedulers.background import BackgroundScheduler
+    from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
     from services.repricer import run_repricer
     from services.sync import sync_all
 
     scheduler = BackgroundScheduler()
+
+    def job_error_listener(event):
+        logger.error(f'Scheduler job error: job={event.job_id}, exception={event.exception}')
+
+    def job_missed_listener(event):
+        logger.warning(f'Scheduler job missed: job={event.job_id}')
+
+    scheduler.add_listener(job_error_listener, EVENT_JOB_ERROR)
+    scheduler.add_listener(job_missed_listener, EVENT_JOB_MISSED)
+
     scheduler.add_job(
         func=run_repricer, trigger='interval', minutes=15,
         args=[app], id='repricer_job',
+        max_instances=1, coalesce=True, misfire_grace_time=300,
     )
     scheduler.add_job(
         func=sync_all, trigger='cron', hour=6, minute=0,
         args=[app], id='sync_job',
+        max_instances=1, coalesce=True, misfire_grace_time=600,
     )
     scheduler.start()
     logger.info('Scheduler started: repricer (15min) + sync (daily 06:00 UTC)')
@@ -94,6 +107,13 @@ def _add_missing_columns():
         db.session.execute(text('ALTER TABLE marketplaces ADD COLUMN shop_name VARCHAR(100)'))
     if 'channel_code' not in mp_columns:
         db.session.execute(text('ALTER TABLE marketplaces ADD COLUMN channel_code VARCHAR(20)'))
+    if 'ignorar_state_code' not in mp_columns:
+        db.session.execute(text('ALTER TABLE marketplaces ADD COLUMN ignorar_state_code BOOLEAN DEFAULT FALSE'))
+    oferta_columns = [c['name'] for c in inspector.get_columns('ofertas')]
+    if 'descripcion' not in oferta_columns:
+        db.session.execute(text('ALTER TABLE ofertas ADD COLUMN descripcion TEXT'))
+    if 'precio_buybox' not in oferta_columns:
+        db.session.execute(text('ALTER TABLE ofertas ADD COLUMN precio_buybox FLOAT'))
     # Clean orphan historico_precios records (oferta was deleted)
     db.session.execute(text('''
         DELETE FROM historico_precios

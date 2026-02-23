@@ -64,13 +64,19 @@ def _execute_repricer():
                         continue
 
                     all_offers = bb_info.get('all_offers', [])
-                    # Filter competitors by same state_code if the offer has one
-                    if oferta.state_code:
+                    # Filter competitors by state_code
+                    if mp.ignorar_state_code:
+                        # Phonehouse-style: compete against all refurbished, exclude Nuevo (state_code 11)
+                        all_offers = [o for o in all_offers if o.get('state_code') != '11']
+                    elif oferta.state_code:
+                        # Default: only compare against same state
                         all_offers = [o for o in all_offers if o.get('state_code') == oferta.state_code]
                     nuevo_precio = _calcular_precio(oferta, bb_info, all_offers)
 
-                    # Siempre actualizar estado buybox
+                    # Siempre actualizar estado buybox y precio buybox
                     oferta.tiene_buybox = bb_info['has_buybox']
+                    if bb_info.get('best_price'):
+                        oferta.precio_buybox = bb_info['best_price']
 
                     if nuevo_precio and nuevo_precio != oferta.precio_actual:
                         shop_sku = ''
@@ -80,6 +86,7 @@ def _execute_repricer():
                         mirakl_quantity = sku_to_quantity.get(shop_sku, 0)
                         result = client.update_price(
                             offer_id, nuevo_precio, shop_sku, quantity=mirakl_quantity,
+                            description=oferta.descripcion,
                         )
                         if result.get('success') and not result.get('skipped'):
                             motivo = _generar_motivo(oferta, bb_info, nuevo_precio)

@@ -35,6 +35,7 @@ export default function OfertasTable({ ofertas, onRefresh }) {
             <th className="px-4 py-3 text-right">Min</th>
             <th className="px-4 py-3 text-right">Max</th>
             <th className="px-4 py-3 text-center">Stock</th>
+            <th className="px-4 py-3 text-right">Mejor precio</th>
             <th className="px-4 py-3 text-center">Buybox</th>
             <th className="px-4 py-3 text-center">Activo</th>
             <th className="px-4 py-3"></th>
@@ -65,6 +66,12 @@ export default function OfertasTable({ ofertas, onRefresh }) {
                 )}
               </td>
               <td className="px-4 py-3 text-center">{o.stock}</td>
+              <td className="px-4 py-3 text-right font-mono">
+                {o.precio_buybox
+                  ? <span className={o.tiene_buybox ? 'text-green-600' : 'text-blue-600'}>{o.precio_buybox.toFixed(2)}</span>
+                  : <span className="text-gray-300">—</span>
+                }
+              </td>
               <td className="px-4 py-3 text-center">
                 <span className={`inline-block w-2.5 h-2.5 rounded-full ${o.tiene_buybox ? 'bg-green-500' : 'bg-red-400'}`} />
               </td>

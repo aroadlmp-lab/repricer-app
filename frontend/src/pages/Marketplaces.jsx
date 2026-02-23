@@ -3,7 +3,7 @@ import api from '../api'
 
 export default function Marketplaces({ onRefresh }) {
   const [items, setItems] = useState([])
-  const [form, setForm] = useState({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '' })
+  const [form, setForm] = useState({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '', ignorar_state_code: false })
   const [editingId, setEditingId] = useState(null)
   const [testResult, setTestResult] = useState({})
   const [syncResult, setSyncResult] = useState({})
@@ -19,7 +19,7 @@ export default function Marketplaces({ onRefresh }) {
     } else {
       await api.post('/marketplaces', form)
     }
-    setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '' })
+    setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '', ignorar_state_code: false })
     setEditingId(null)
     load()
     onRefresh()
@@ -27,7 +27,7 @@ export default function Marketplaces({ onRefresh }) {
 
   const startEdit = (mp) => {
     setEditingId(mp.id)
-    setForm({ nombre: mp.nombre, url_api: mp.url_api, api_key: '', shop_id: mp.shop_id || '', shop_name: mp.shop_name || '', channel_code: mp.channel_code || '' })
+    setForm({ nombre: mp.nombre, url_api: mp.url_api, api_key: '', shop_id: mp.shop_id || '', shop_name: mp.shop_name || '', channel_code: mp.channel_code || '', ignorar_state_code: mp.ignorar_state_code || false })
   }
 
   const testConnection = async (id) => {
@@ -78,11 +78,16 @@ export default function Marketplaces({ onRefresh }) {
           <input placeholder="Channel code (ej: ES_B2C, B2C)" value={form.channel_code} onChange={e => setForm({ ...form, channel_code: e.target.value })}
             className="border rounded px-3 py-2 text-sm" />
         </div>
+        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+          <input type="checkbox" checked={form.ignorar_state_code} onChange={e => setForm({ ...form, ignorar_state_code: e.target.checked })}
+            className="w-4 h-4 rounded" />
+          Ignorar estado estético (competir contra todos los reacondicionados, excluye Nuevo)
+        </label>
         <div className="flex gap-2">
           <button type="submit" className="bg-gray-900 text-white px-4 py-2 rounded text-sm">
             {editingId ? 'Actualizar' : 'Crear'}
           </button>
-          {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '' }) }}
+          {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '', ignorar_state_code: false }) }}
             className="text-gray-500 text-sm">Cancelar</button>}
         </div>
       </form>

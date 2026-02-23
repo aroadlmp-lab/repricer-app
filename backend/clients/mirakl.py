@@ -70,6 +70,7 @@ class MiraklClient(MarketplaceClient):
                         'sku': o.get('shop_sku', ''),
                         'product_sku': o.get('product_sku', ''),
                         'product_title': o.get('product_title', o.get('description', '')),
+                        'description': o.get('description', ''),
                         'price': price,
                         'stock': int(o.get('quantity', 0)),
                         'state_code': o.get('state_code', o.get('offer_state_code', '')),
@@ -172,8 +173,8 @@ class MiraklClient(MarketplaceClient):
         except Exception:
             return None
 
-    def update_price(self, offer_id: str, price: float, shop_sku: str = '', quantity: int = None) -> dict:
-        """Actualiza precio via OF24 (POST /api/offers). Incluye quantity para no resetear stock."""
+    def update_price(self, offer_id: str, price: float, shop_sku: str = '', quantity: int = None, description: str = None) -> dict:
+        """Actualiza precio via OF24 (POST /api/offers). Incluye quantity para no resetear stock y description para no borrarla."""
         if self.mock_mode:
             return {'success': True}
         try:
@@ -187,6 +188,10 @@ class MiraklClient(MarketplaceClient):
                 'price': price,  # Always required by Mirakl
                 'quantity': quantity,
             }
+
+            # Include description to prevent Mirakl from clearing it
+            if description:
+                offer_data['description'] = description
 
             # Add channel-specific price if configured
             if self.channel_code:

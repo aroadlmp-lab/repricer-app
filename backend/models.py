@@ -13,6 +13,7 @@ class Marketplace(db.Model):
     shop_id = db.Column(db.String(50), nullable=True)
     shop_name = db.Column(db.String(100), nullable=True)
     channel_code = db.Column(db.String(20), nullable=True)
+    ignorar_state_code = db.Column(db.Boolean, default=False)
     activo = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -28,6 +29,7 @@ class Marketplace(db.Model):
             'shop_id': self.shop_id,
             'shop_name': self.shop_name,
             'channel_code': self.channel_code,
+            'ignorar_state_code': self.ignorar_state_code,
             'activo': self.activo,
             'tiene_api_key': self.api_key_encrypted is not None,
             'created_at': (self.created_at.isoformat() + 'Z') if self.created_at else None,
@@ -64,9 +66,11 @@ class Oferta(db.Model):
     producto_id = db.Column(db.Integer, db.ForeignKey('productos.id'), nullable=False)
     offer_id_externo = db.Column(db.String(100), nullable=True)
     product_sku = db.Column(db.String(100), nullable=True)
+    descripcion = db.Column(db.Text, nullable=True)
     precio_actual = db.Column(db.Float, nullable=False)
     precio_min = db.Column(db.Float, nullable=True)
     precio_max = db.Column(db.Float, nullable=True)
+    precio_buybox = db.Column(db.Float, nullable=True)
     stock = db.Column(db.Integer, default=0)
     state_code = db.Column(db.String(20), nullable=True)
     tiene_buybox = db.Column(db.Boolean, default=False)
@@ -85,9 +89,11 @@ class Oferta(db.Model):
             'producto_id': self.producto_id,
             'offer_id_externo': self.offer_id_externo,
             'product_sku': self.product_sku,
+            'descripcion': self.descripcion,
             'precio_actual': self.precio_actual,
             'precio_min': self.precio_min,
             'precio_max': self.precio_max,
+            'precio_buybox': self.precio_buybox,
             'stock': self.stock,
             'state_code': self.state_code,
             'tiene_buybox': self.tiene_buybox,
