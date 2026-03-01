@@ -102,17 +102,26 @@ def _execute_repricer(progress_callback=None):
 
                     nuevo_precio = _calcular_precio(oferta, bb_info_calc, all_offers)
 
-                    # Siempre actualizar estado buybox y precio buybox
-                    oferta.tiene_buybox = bb_info['has_buybox']
-                    if bb_info.get('best_price'):
-                        oferta.precio_buybox = bb_info['best_price']
+                    # Siempre actualizar estado buybox y precio buybox usando datos
+                    # filtrados (bb_info_calc) para que el display sea consistente
+                    # con la lógica de cálculo (excluye NUEVO en ignorar_state_code)
+                    oferta.tiene_buybox = bb_info_calc['has_buybox']
+                    if competitor_prices_filtered:
+                        # Solo guardar el mejor precio del segmento filtrado (REAC, no NUEVO)
+                        oferta.precio_buybox = bb_info_calc['best_price']
 
                     if nuevo_precio and nuevo_precio != oferta.precio_actual:
                         shop_sku = ''
                         if oferta.producto:
                             shop_sku = oferta.producto.sku
-                        # Use quantity from Mirakl (fetched at start), not from DB
-                        mirakl_quantity = sku_to_quantity.get(shop_sku, 0)
+                        # Use quantity from Mirakl (fetched at start), not from DB.
+                        # Diferenciar "no encontrado" (posible filtro por channel_code)
+                        # de "encontrado con stock 0" (realmente sin stock).
+                        if shop_sku in sku_to_quantity:
+                            mirakl_quantity = sku_to_quantity[shop_sku]
+                        else:
+                            mirakl_quantity = oferta.stock
+                            logger.warning(f'SKU {shop_sku!r} not in sku_to_quantity (channel filter?), using DB stock={oferta.stock}')
                         result = client.update_price(
                             offer_id, nuevo_precio, shop_sku, quantity=mirakl_quantity,
                             description=oferta.descripcion,
@@ -185,10 +194,12 @@ def _calcular_precio(oferta: Oferta, bb_info: dict, all_offers: list = None) -> 
         competitor_best = _find_best_competitor_price(all_offers or [])
         target = competitor_best if competitor_best else best_price
         if target > 0:
-            nuevo = round(target - 0.01, 2)
+            # Cap at precio_max (mismo patrón que rama "con buybox"):
+            # si el competidor está por encima de nuestro max, bajamos hasta precio_max
+            nuevo = round(min(target - 0.01, precio_max), 2)
         else:
             nuevo = round(precio - 0.01, 2)
-        if nuevo >= precio_min and nuevo <= precio_max:
+        if nuevo >= precio_min:
             return nuevo
         return None
     else:
