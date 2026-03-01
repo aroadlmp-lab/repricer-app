@@ -1,4 +1,7 @@
-from flask import Blueprint, jsonify
+import json
+import queue
+import threading
+from flask import Blueprint, jsonify, Response, stream_with_context, current_app
 from services.repricer import _execute_repricer, get_client
 from models import Marketplace, Oferta
 
@@ -7,11 +10,42 @@ bp = Blueprint('repricer', __name__, url_prefix='/api/repricer')
 
 @bp.route('/run', methods=['POST'])
 def run():
-    try:
-        _execute_repricer()
-        return jsonify({'status': 'ok'})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    """Ejecuta el repricer y hace streaming de progreso como NDJSON."""
+    q = queue.Queue()
+    app = current_app._get_current_object()
+
+    def progress_callback(event):
+        q.put(event)
+
+    def run_in_thread():
+        ctx = app.app_context()
+        ctx.push()
+        try:
+            _execute_repricer(progress_callback=progress_callback)
+        except Exception as e:
+            q.put({'type': 'error', 'message': str(e)})
+        finally:
+            ctx.pop()
+            q.put(None)  # Sentinel: fin del stream
+
+    t = threading.Thread(target=run_in_thread, daemon=True)
+    t.start()
+
+    def generate():
+        while True:
+            try:
+                item = q.get(timeout=310)  # Margen ligeramente inferior al timeout de Gunicorn (300s)
+                if item is None:
+                    break
+                yield json.dumps(item) + '\n'
+            except queue.Empty:
+                break
+
+    return Response(
+        stream_with_context(generate()),
+        content_type='application/x-ndjson',
+        headers={'X-Accel-Buffering': 'no', 'Cache-Control': 'no-cache'},
+    )
 
 
 @bp.route('/debug/<int:marketplace_id>', methods=['GET'])

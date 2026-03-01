@@ -28,7 +28,7 @@ def run_repricer(app=None):
             ctx.pop()
 
 
-def _execute_repricer():
+def _execute_repricer(progress_callback=None):
     import logging
     logger = logging.getLogger(__name__)
 
@@ -42,12 +42,19 @@ def _execute_repricer():
         try:
             client = get_client(mp)
 
+            if progress_callback:
+                progress_callback({'type': 'start', 'marketplace': mp.nombre})
+
             # Fetch all offers from Mirakl to get current quantities (same as sync)
             mirakl_offers = client.get_offers()
             sku_to_quantity = {o['sku']: o['stock'] for o in mirakl_offers}
             logger.info(f'REPRICER {mp.nombre}: fetched {len(mirakl_offers)} offers from Mirakl, channel_code={mp.channel_code}')
 
             ofertas = Oferta.query.filter_by(marketplace_id=mp.id, activo=True).filter(Oferta.stock > 0).all()
+            total = len(ofertas)
+
+            if progress_callback:
+                progress_callback({'type': 'total', 'marketplace': mp.nombre, 'total': total})
 
             for oferta in ofertas:
                 procesadas += 1
@@ -128,6 +135,15 @@ def _execute_repricer():
                             errores_list.append(f'Oferta {oferta.id}: update failed: {result}')
                 except Exception as e:
                     errores_list.append(f'Oferta {oferta.id}: {str(e)}')
+
+                if progress_callback:
+                    progress_callback({
+                        'type': 'progress',
+                        'marketplace': mp.nombre,
+                        'procesadas': procesadas,
+                        'total': total,
+                        'cambios': cambios,
+                    })
 
             db.session.add(Ejecucion(
                 marketplace_id=mp.id,
