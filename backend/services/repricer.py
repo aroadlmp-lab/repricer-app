@@ -73,7 +73,27 @@ def _execute_repricer():
                     elif oferta.state_code:
                         # Default: only compare against same state
                         all_offers = [o for o in all_offers if o.get('state_code') == oferta.state_code]
-                    nuevo_precio = _calcular_precio(oferta, bb_info, all_offers)
+
+                    # Recompute has_buybox based on the filtered offers to avoid mismatch:
+                    # bb_info['has_buybox'] was computed before state filtering, so a cheaper
+                    # excluded competitor (e.g. NUEVO in Phonehouse) could wrongly set has_buybox=False
+                    # while the filtered set only has more expensive competitors above us.
+                    bb_info_calc = dict(bb_info)
+                    competitor_prices_filtered = [
+                        o['price'] for o in all_offers
+                        if not o.get('is_mine', False) and o.get('price', 0) > 0
+                    ]
+                    my_offers_filtered = [o for o in all_offers if o.get('is_mine', False)]
+                    my_price_filtered = my_offers_filtered[0]['price'] if my_offers_filtered else bb_info.get('my_price', 0)
+                    if competitor_prices_filtered:
+                        best_filtered = min(competitor_prices_filtered)
+                        bb_info_calc['has_buybox'] = my_price_filtered > 0 and my_price_filtered <= best_filtered
+                        bb_info_calc['best_price'] = round(best_filtered, 2)
+                    elif all_offers:
+                        # Only our own offers remain after filtering → we have the buybox
+                        bb_info_calc['has_buybox'] = my_price_filtered > 0
+
+                    nuevo_precio = _calcular_precio(oferta, bb_info_calc, all_offers)
 
                     # Siempre actualizar estado buybox y precio buybox
                     oferta.tiene_buybox = bb_info['has_buybox']
@@ -152,7 +172,7 @@ def _calcular_precio(oferta: Oferta, bb_info: dict, all_offers: list = None) -> 
             nuevo = round(target - 0.01, 2)
         else:
             nuevo = round(precio - 0.01, 2)
-        if nuevo >= precio_min:
+        if nuevo >= precio_min and nuevo <= precio_max:
             return nuevo
         return None
     else:
