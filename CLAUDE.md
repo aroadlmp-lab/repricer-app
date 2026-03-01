@@ -71,14 +71,16 @@ Ejecuta cada 15 minutos para cada marketplace activo:
    - Filtra competidores por `state_code`:
      - Si `marketplace.ignorar_state_code=True`: excluye solo `state_code=11` (Nuevo), compite contra todos los reacondicionados
      - Si no: filtra por mismo `state_code` exacto (comportamiento por defecto)
+   - **Recalcula `has_buybox`** sobre el conjunto filtrado (no el global de P11) para evitar que un NUEVO excluido fuerce `has_buybox=False` cuando en realidad somos el REAC más barato
 4. Calcula nuevo precio:
-   - **Sin buybox:** bajar a `mejor_precio_competidor - 0.01` (excluyendo ofertas propias), respetando `precio_min`
-   - **Con buybox:** subir hasta `siguiente_competidor - 0.01`, respetando `precio_max`. Si no hay competidor por encima, sube 0.01
+   - **Sin buybox:** bajar a `min(mejor_precio_competidor - 0.01, precio_max)` (excluyendo ofertas propias), respetando `precio_min`. Si el competidor está por encima de `precio_max`, baja hasta `precio_max` en lugar de quedarse paralizado
+   - **Con buybox:** subir hasta `min(siguiente_competidor - 0.01, precio_max)`. Si no hay competidor por encima, sube 0.01
 5. Si hay cambio de precio:
-   - Busca el `quantity` real en el diccionario (obtenido en paso 1)
-   - Si quantity es 0 o no se encuentra, **salta el update** (evita modificar ofertas sin stock)
+   - Busca el `quantity` real en el diccionario (obtenido en paso 1):
+     - SKU **encontrado con quantity=0** → salta el update (sin stock real)
+     - SKU **no encontrado** en el dict (posible filtro por `channel_code` en `get_offers()`) → usa `oferta.stock` como fallback y loguea warning en Railway
    - Actualiza vía OF24 (`POST /api/offers`): envía `price` + `quantity` + `description` + `all_prices` si hay `channel_code`
-6. Actualiza `tiene_buybox` y `precio_buybox` (mejor precio del mercado) en cada ejecución
+6. Actualiza `tiene_buybox` y `precio_buybox` usando el **segmento filtrado** (no el mercado global). En marketplaces con `ignorar_state_code`, refleja la posición en el segmento REAC, no frente a NUEVO. `precio_buybox` solo se actualiza cuando hay competidores en el segmento filtrado
 7. Registra cambio en HistoricoPrecios y crea Ejecucion
 
 ## Sincronización
@@ -143,7 +145,7 @@ Login con formulario, sesión Flask con cookie. Credenciales configuradas via `A
 - `GET /stats` — Estadísticas dashboard
 
 ### Repricer `/api/repricer`
-- `POST /run` — Ejecutar manualmente
+- `POST /run` — Ejecutar manualmente (streaming NDJSON: emite eventos `start/total/progress` con marketplace, procesadas, total, cambios)
 - `GET /debug/:marketplace_id` — Debug buybox sin hacer cambios
 - `GET /test-update/:oferta_id` — Test update (envía precio actual, obtiene quantity de Mirakl)
 - `GET /test-update-debug/:oferta_id` — Test update completo con diagnóstico: muestra stock_db, stock_mirakl, import_id e import_status de Mirakl
@@ -167,6 +169,7 @@ Endpoints Mirakl usados:
 - Buybox se muestra como punto verde/rojo
 - Histórico: ejecuciones con error muestran botón "Ver error" que expande el texto exacto del fallo. Badge naranja para estado `parcial`
 - Timestamps se almacenan en UTC y se envían con sufijo `Z` para que el navegador los convierta a hora local
+- El botón "Ejecutar repricer" del Dashboard muestra una **barra de progreso en tiempo real**: spinner, nombre del marketplace activo, contador `N / M ofertas`, cambios realizados en vivo y tiempo transcurrido. El backend hace streaming NDJSON (`application/x-ndjson`) desde un thread secundario con Queue; el frontend lo consume con `fetch` + `ReadableStream` (Axios no soporta streaming)
 
 ## Deploy
 
@@ -182,10 +185,11 @@ Railway despliega automáticamente al hacer `git push origin main`. El build eje
 - `state_code` en Oferta indica el estado de reacondicionado del producto
 - `ignorar_state_code` en Marketplace: cuando es `True`, el repricer no filtra por estado exacto sino que compite contra todos los reacondicionados excluyendo Nuevo (`state_code=11`). Útil para Phonehouse, donde los estados son NUEVO / REACONDICIONADO-FUNCIONAL / REACONDICIONADO-MUY BUENO / REACONDICIONADO-COMO NUEVO
 - `descripcion` en Oferta: se guarda desde el campo `description` de la API de Mirakl y se incluye siempre en el payload OF24 para evitar que Mirakl la borre al actualizar el precio
-- `precio_buybox` en Oferta: precio más bajo del mercado (ganador de buybox), actualizado en cada ejecución del repricer. Se muestra en la tabla de ofertas
+- `precio_buybox` en Oferta: precio más bajo del **segmento filtrado** (ganador de buybox dentro del estado de reacondicionado relevante), actualizado en cada ejecución del repricer. En marketplaces con `ignorar_state_code`, refleja el mínimo REAC, no el global (que podría ser un NUEVO más barato). Si no hay competidores en el segmento filtrado, el campo no se actualiza (conserva el valor de la última ejecución con competidores). Se muestra en la tabla de ofertas
 - **Rate limiting P11:** el repricer espera 0.3s entre llamadas P11 y reintenta automáticamente hasta 3 veces si recibe 429. Carrefour tiene límite de peticiones por minuto en la API
 - **Scheduler:** configurado con `max_instances=1` y `coalesce=True` para evitar solapamiento de ejecuciones si una tarda más de 15 min. Incluye listener de errores para logging explícito en Railway
-- **IMPORTANTE:** El repricer obtiene TODAS las ofertas de Mirakl al inicio (usando `get_offers()`, igual que el sync) y crea un diccionario `{sku: quantity}`. Para cada update, usa el quantity de ese diccionario. Si el SKU no se encuentra o tiene quantity=0, el update se salta. Esto evita modificar el stock y previene re-listar productos vendidos
+- **IMPORTANTE:** El repricer obtiene TODAS las ofertas de Mirakl al inicio (usando `get_offers()`, igual que el sync) y crea un diccionario `{sku: quantity}`. Para cada update distingue dos casos: (1) SKU **encontrado con quantity=0** → salta el update (sin stock real, evita re-listar productos vendidos); (2) SKU **no encontrado** en el dict (puede ocurrir cuando `channel_code` filtra `get_offers()` y la oferta pertenece a otro canal) → usa `oferta.stock` de la BD como fallback y loguea un warning en Railway para facilitar el diagnóstico
+- **IMPORTANTE (has_buybox filtrado):** El campo `has_buybox` que devuelve P11 se calcula sobre el mercado global (incluye NUEVO y REAC). Tras filtrar `all_offers` por `state_code`, el repricer **recalcula `has_buybox`** sobre el conjunto filtrado. Esto evita que un competidor NUEVO más barato (excluido en marketplaces con `ignorar_state_code`) fuerce `has_buybox=False` e impida subir precio cuando en realidad somos el REAC más barato del segmento. El mismo `has_buybox` recalculado se usa tanto para la lógica de precio como para actualizar `tiene_buybox` en la BD
 - Algunos marketplaces (Carrefour, Phonehouse) resetean `quantity` a 0 si no se incluye en el update, por eso siempre se envía
 - Los logs de Railway muestran `REPRICER {marketplace}: fetched X offers from Mirakl` al inicio y `UPDATE_PRICE:` con el payload exacto enviado
 - Gunicorn tiene timeout de 300s para permitir que el repricer procese muchas ofertas sin ser matado
