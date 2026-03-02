@@ -50,7 +50,7 @@ frontend/src/
 
 ## Modelos de datos
 
-- **Marketplace** — nombre, tipo, url_api, api_key_encrypted, shop_id, shop_name, channel_code, ignorar_state_code, activo
+- **Marketplace** — nombre, tipo, url_api, api_key_encrypted, shop_id, shop_name, channel_code, ignorar_state_code, margen_competencia, activo
 - **Producto** — sku (unique), ean, nombre, marca
 - **Oferta** — marketplace_id, producto_id, offer_id_externo, product_sku, descripcion, precio_actual, precio_min, precio_max, precio_buybox, stock, state_code, tiene_buybox, activo
 - **HistoricoPrecios** — oferta_id, precio_anterior, precio_nuevo, motivo, tenia_buybox
@@ -72,9 +72,10 @@ Ejecuta cada 15 minutos para cada marketplace activo:
      - Si `marketplace.ignorar_state_code=True`: excluye solo `state_code=11` (Nuevo), compite contra todos los reacondicionados
      - Si no: filtra por mismo `state_code` exacto (comportamiento por defecto)
    - **Recalcula `has_buybox`** sobre el conjunto filtrado (no el global de P11) para evitar que un NUEVO excluido fuerce `has_buybox=False` cuando en realidad somos el REAC más barato
-4. Calcula nuevo precio:
-   - **Sin buybox:** bajar a `min(mejor_precio_competidor - 0.01, precio_max)` (excluyendo ofertas propias), respetando `precio_min`. Si el competidor está por encima de `precio_max`, baja hasta `precio_max` en lugar de quedarse paralizado
-   - **Con buybox:** subir hasta `min(siguiente_competidor - 0.01, precio_max)`. Si no hay competidor por encima, sube 0.01
+   - La comparación usa `total_price` (precio + envío) para determinar posición real en el mercado; `price` solo se usa para display (`precio_buybox`)
+4. Calcula nuevo precio aplicando `margen_competencia` del marketplace:
+   - **Sin buybox:** bajar a `min(mejor_total_competidor × (1 - margen/100) - 0.01, precio_max)`, respetando `precio_min`. Con `margen=0` (default) el comportamiento es `-0.01` del competidor
+   - **Con buybox:** subir hasta `min(siguiente_total_competidor × (1 - margen/100) - 0.01, precio_max)`. Si no hay competidor por encima y `margen=0`, sube 0.01
 5. Si hay cambio de precio:
    - Busca el `quantity` real en el diccionario (obtenido en paso 1):
      - SKU **encontrado con quantity=0** → salta el update (sin stock real)
@@ -180,7 +181,7 @@ Railway despliega automáticamente al hacer `git push origin main`. El build eje
 - `shop_name` en Marketplace debe coincidir exactamente con el nombre de tu tienda en Mirakl para que la identificación de ofertas propias funcione
 - El repricer excluye ofertas propias al calcular precios (evita autocompetencia cuando hay varias unidades)
 - `product_sku` en Oferta es el ID de producto en Mirakl (necesario para P11), distinto del SKU del producto
-- Las migraciones manuales en `_add_missing_columns()` añaden columnas si no existen (product_sku, shop_name, channel_code, state_code, ignorar_state_code, descripcion, precio_buybox) y limpian registros huérfanos de historico_precios
+- Las migraciones manuales en `_add_missing_columns()` añaden columnas si no existen (product_sku, shop_name, channel_code, state_code, ignorar_state_code, descripcion, precio_buybox, margen_competencia) y limpian registros huérfanos de historico_precios
 - `channel_code` en Marketplace permite que dos marketplaces compartan la misma API pero gestionen precios por canal (ej: Pixmania ES con `ES_B2C`, Pixmania FR con `B2C`)
 - `state_code` en Oferta indica el estado de reacondicionado del producto
 - `ignorar_state_code` en Marketplace: cuando es `True`, el repricer no filtra por estado exacto sino que compite contra todos los reacondicionados excluyendo Nuevo (`state_code=11`). Útil para Phonehouse, donde los estados son NUEVO / REACONDICIONADO-FUNCIONAL / REACONDICIONADO-MUY BUENO / REACONDICIONADO-COMO NUEVO
@@ -195,3 +196,5 @@ Railway despliega automáticamente al hacer `git push origin main`. El build eje
 - Gunicorn tiene timeout de 300s para permitir que el repricer procese muchas ofertas sin ser matado
 - Los SKUs pueden contener comas (ej: `#RN0007,`, `#RN0007,,`) — esto es intencional para diferenciar estados de reacondicionado
 - El logging está configurado en `app.py` para enviar a stdout y ser visible en Railway Deploy Logs
+- **`margen_competencia` en Marketplace:** porcentaje de descuento adicional sobre el precio del competidor para compensar desventaja en seller score (ej: valoraciones, tiempo de envío). Con `margen=0` (default) el repricer apunta a `competidor - 0.01€`. Con `margen=5`, apunta a `competidor × 0.95 - 0.01€`. Útil para marketplaces donde el algoritmo de buybox penaliza sellers nuevos o con pocas valoraciones (ej: Pixmania). Se configura por marketplace en la UI de Marketplaces. La comparación de precios usa siempre `total_price` (precio + envío) para determinar quién tiene la buybox, ya que es lo que el comprador ve realmente
+- **Cookie de sesión:** configurada con `HttpOnly`, `SameSite=Lax` y `Secure` (este último solo activo en Railway, no en desarrollo local con HTTP)
