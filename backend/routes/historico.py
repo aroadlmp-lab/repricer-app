@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from sqlalchemy import select
 from models import HistoricoPrecios, Ejecucion, Oferta
 
 bp = Blueprint('historico', __name__, url_prefix='/api/historico')
@@ -9,8 +10,8 @@ def listar():
     q = HistoricoPrecios.query
     mp_id = request.args.get('marketplace_id')
     if mp_id:
-        oferta_ids = [o.id for o in Oferta.query.filter_by(marketplace_id=int(mp_id)).all()]
-        q = q.filter(HistoricoPrecios.oferta_id.in_(oferta_ids))
+        subq = select(Oferta.id).where(Oferta.marketplace_id == int(mp_id)).scalar_subquery()
+        q = q.filter(HistoricoPrecios.oferta_id.in_(subq))
     limit = request.args.get('limit', 50, type=int)
     items = q.order_by(HistoricoPrecios.created_at.desc()).limit(limit).all()
     return jsonify([h.to_dict() for h in items])

@@ -84,6 +84,11 @@ class Oferta(db.Model):
                                 order_by='HistoricoPrecios.created_at.desc()',
                                 cascade='all, delete-orphan')
 
+    __table_args__ = (
+        db.Index('ix_ofertas_marketplace_activo', 'marketplace_id', 'activo'),
+        db.Index('ix_ofertas_marketplace_id', 'marketplace_id'),
+    )
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -117,6 +122,11 @@ class HistoricoPrecios(db.Model):
     tenia_buybox = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
+    __table_args__ = (
+        db.Index('ix_historico_oferta_id', 'oferta_id'),
+        db.Index('ix_historico_created_at', 'created_at'),
+    )
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -139,6 +149,9 @@ class Ejecucion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     marketplace_id = db.Column(db.Integer, db.ForeignKey('marketplaces.id'), nullable=True)
     estado = db.Column(db.String(20), default='ok')  # ok, error, parcial
+    __table_args__ = (
+        db.Index('ix_ejecuciones_created_at', 'created_at'),
+    )
     ofertas_procesadas = db.Column(db.Integer, default=0)
     cambios_realizados = db.Column(db.Integer, default=0)
     errores = db.Column(db.Text, nullable=True)

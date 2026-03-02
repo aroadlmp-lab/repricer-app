@@ -11,6 +11,7 @@ export default function Dashboard({ selectedMp }) {
   const [elapsed, setElapsed] = useState(0)
   const timerRef = useRef(null)
   const startTimeRef = useRef(null)
+  const abortRef = useRef(null)
 
   const load = () => {
     api.get('/historico/stats').then(r => setStats(r.data))
@@ -20,8 +21,11 @@ export default function Dashboard({ selectedMp }) {
 
   useEffect(load, [selectedMp])
 
-  // Limpiar timer al desmontar
-  useEffect(() => () => clearInterval(timerRef.current), [])
+  // Limpiar timer y cancelar fetch al desmontar
+  useEffect(() => () => {
+    clearInterval(timerRef.current)
+    abortRef.current?.abort()
+  }, [])
 
   const runRepricer = async () => {
     setRunning(true)
@@ -35,9 +39,11 @@ export default function Dashboard({ selectedMp }) {
 
     try {
       // Usamos fetch nativo porque Axios no soporta streaming
+      abortRef.current = new AbortController()
       const resp = await fetch('/api/repricer/run', {
         method: 'POST',
         credentials: 'include',
+        signal: abortRef.current.signal,
       })
 
       if (!resp.ok || !resp.body) {

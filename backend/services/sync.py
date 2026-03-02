@@ -17,66 +17,71 @@ def sync_marketplace(mp):
     actualizadas = 0
     ignoradas = 0
 
-    for o in ofertas_api:
-        stock = int(o.get('stock', 0))
-        p_sku = o.get('product_id', '') or o.get('product_sku', '')
-        sku = o.get('sku', '')
+    try:
+        for o in ofertas_api:
+            stock = int(o.get('stock', 0))
+            p_sku = o.get('product_id', '') or o.get('product_sku', '')
+            sku = o.get('sku', '')
 
-        oferta = Oferta.query.filter_by(
-            marketplace_id=mp.id,
-            offer_id_externo=o['offer_id']
-        ).first()
-
-        # Si stock es 0: eliminar si ya existe, no crear nueva
-        if stock <= 0:
-            if oferta:
-                db.session.delete(oferta)
-            ignoradas += 1
-            continue
-
-        producto = Producto.query.filter_by(sku=sku).first()
-        if not producto:
-            producto = Producto(
-                sku=sku,
-                ean=o.get('ean', ''),
-                nombre=o.get('product_title', o['sku']),
-                marca='',
-            )
-            db.session.add(producto)
-            db.session.flush()
-
-        if oferta:
-            oferta.precio_actual = o['price']
-            oferta.stock = stock
-            oferta.product_sku = p_sku
-            oferta.state_code = o.get('state_code', '')
-            oferta.descripcion = o.get('description', '')
-            actualizadas += 1
-        else:
-            oferta = Oferta(
+            oferta = Oferta.query.filter_by(
                 marketplace_id=mp.id,
-                producto_id=producto.id,
-                offer_id_externo=o['offer_id'],
-                product_sku=p_sku,
-                descripcion=o.get('description', ''),
-                precio_actual=o['price'],
-                precio_min=round(o['price'] * 0.90, 2),
-                precio_max=round(o['price'] * 1.10, 2),
-                stock=stock,
-                state_code=o.get('state_code', ''),
-                tiene_buybox=False,
-                activo=False,
-            )
-            db.session.add(oferta)
-            nuevas += 1
+                offer_id_externo=o['offer_id']
+            ).first()
 
-    db.session.commit()
-    return {
-        'ofertas_api': len(ofertas_api),
-        'nuevas': nuevas,
-        'actualizadas': actualizadas,
-        'ignoradas_sin_stock': ignoradas,
-    }
+            # Si stock es 0: eliminar si ya existe, no crear nueva
+            if stock <= 0:
+                if oferta:
+                    db.session.delete(oferta)
+                ignoradas += 1
+                continue
+
+            producto = Producto.query.filter_by(sku=sku).first()
+            if not producto:
+                producto = Producto(
+                    sku=sku,
+                    ean=o.get('ean', ''),
+                    nombre=o.get('product_title', o['sku']),
+                    marca='',
+                )
+                db.session.add(producto)
+                db.session.flush()
+
+            if oferta:
+                oferta.precio_actual = o['price']
+                oferta.stock = stock
+                oferta.product_sku = p_sku
+                oferta.state_code = o.get('state_code', '')
+                oferta.descripcion = o.get('description', '')
+                actualizadas += 1
+            else:
+                oferta = Oferta(
+                    marketplace_id=mp.id,
+                    producto_id=producto.id,
+                    offer_id_externo=o['offer_id'],
+                    product_sku=p_sku,
+                    descripcion=o.get('description', ''),
+                    precio_actual=o['price'],
+                    precio_min=round(o['price'] * 0.90, 2),
+                    precio_max=round(o['price'] * 1.10, 2),
+                    stock=stock,
+                    state_code=o.get('state_code', ''),
+                    tiene_buybox=False,
+                    activo=False,
+                )
+                db.session.add(oferta)
+                nuevas += 1
+
+        db.session.commit()
+        return {
+            'ofertas_api': len(ofertas_api),
+            'nuevas': nuevas,
+            'actualizadas': actualizadas,
+            'ignoradas_sin_stock': ignoradas,
+        }
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'sync_marketplace {mp.nombre} falló, rollback realizado: {e}', exc_info=True)
+        raise
 
 
 def sync_all(app=None):

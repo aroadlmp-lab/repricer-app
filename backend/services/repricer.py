@@ -1,9 +1,12 @@
 import time
+import logging
 from typing import Optional
 from datetime import datetime, timezone
 from extensions import db, decrypt_value
 from models import Marketplace, Oferta, HistoricoPrecios, Ejecucion
 from clients.mirakl import MiraklClient
+
+logger = logging.getLogger(__name__)
 
 
 def get_client(marketplace: Marketplace) -> MiraklClient:
@@ -11,8 +14,8 @@ def get_client(marketplace: Marketplace) -> MiraklClient:
     if marketplace.api_key_encrypted:
         try:
             api_key = decrypt_value(marketplace.api_key_encrypted)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f'[{marketplace.nombre}] Error desencriptando API key: {e}. El marketplace operará en mock mode (sin llamadas reales a Mirakl).')
     return MiraklClient(marketplace.url_api, api_key, marketplace.shop_id, marketplace.shop_name,
                         channel_code=marketplace.channel_code)
 
@@ -29,8 +32,6 @@ def run_repricer(app=None):
 
 
 def _execute_repricer(progress_callback=None):
-    import logging
-    logger = logging.getLogger(__name__)
 
     marketplaces = Marketplace.query.filter_by(activo=True).all()
 
@@ -128,7 +129,8 @@ def _execute_repricer(progress_callback=None):
                             mirakl_quantity = sku_to_quantity[shop_sku]
                         else:
                             mirakl_quantity = oferta.stock
-                            logger.warning(f'SKU {shop_sku!r} not in sku_to_quantity (channel filter?), using DB stock={oferta.stock}')
+                            logger.warning(f'[{mp.nombre}] Oferta {oferta.id} SKU {shop_sku!r} no encontrado en sku_to_quantity '
+                                           f'(posible filtro channel_code={mp.channel_code!r}), usando DB stock={oferta.stock}')
                         result = client.update_price(
                             offer_id, nuevo_precio, shop_sku, quantity=mirakl_quantity,
                             description=oferta.descripcion,

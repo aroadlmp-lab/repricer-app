@@ -17,16 +17,19 @@ class MiraklClient(MarketplaceClient):
         self.shop_name = shop_name
         self.channel_code = channel_code
         self.mock_mode = api_key is None
+        # Reutilizar conexión TCP entre llamadas (keep-alive) para reducir latencia
+        self._session = requests.Session()
+        self._session.headers.update({'Authorization': self.api_key or '', 'Accept': 'application/json'})
 
-    def _headers(self):
-        return {'Authorization': self.api_key, 'Accept': 'application/json'}
+    def close(self):
+        self._session.close()
 
     def test_connection(self) -> bool:
         if self.mock_mode:
             return True
         try:
-            r = requests.get(f'{self.url_api}/api/offers', headers=self._headers(),
-                             params={'max': 1}, timeout=10)
+            r = self._session.get(f'{self.url_api}/api/offers',
+                                  params={'max': 1}, timeout=10)
             return r.status_code == 200
         except Exception:
             return False
@@ -38,8 +41,8 @@ class MiraklClient(MarketplaceClient):
         offset = 0
         while True:
             try:
-                r = requests.get(f'{self.url_api}/api/offers', headers=self._headers(),
-                                 params={'max': 100, 'offset': offset}, timeout=30)
+                r = self._session.get(f'{self.url_api}/api/offers',
+                                      params={'max': 100, 'offset': offset}, timeout=30)
                 r.raise_for_status()
                 data = r.json()
                 offers = data.get('offers', [])
@@ -93,10 +96,13 @@ class MiraklClient(MarketplaceClient):
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                r = requests.get(f'{self.url_api}/api/products/offers', headers=self._headers(),
-                                 params={'product_ids': product_sku}, timeout=15)
+                r = self._session.get(f'{self.url_api}/api/products/offers',
+                                      params={'product_ids': product_sku}, timeout=15)
                 if r.status_code == 429:
-                    wait = int(r.headers.get('Retry-After', 5 * (attempt + 1)))
+                    try:
+                        wait = int(r.headers.get('Retry-After', 5 * (attempt + 1)))
+                    except (ValueError, TypeError):
+                        wait = 5 * (attempt + 1)
                     logger.warning(f'P11 rate limit (429) for {product_sku}, waiting {wait}s (attempt {attempt+1}/{max_retries})')
                     time.sleep(wait)
                     continue
@@ -171,28 +177,12 @@ class MiraklClient(MarketplaceClient):
         if self.mock_mode:
             return {'status': 'mock'}
         try:
-            r = requests.get(f'{self.url_api}/api/offers/imports/{import_id}',
-                             headers=self._headers(), timeout=10)
+            r = self._session.get(f'{self.url_api}/api/offers/imports/{import_id}',
+                                  timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
             return {'error': str(e)}
-
-    def get_offer_quantity(self, shop_sku: str) -> Optional[int]:
-        """Get current quantity of an offer from Mirakl API."""
-        if self.mock_mode:
-            return 1
-        try:
-            r = requests.get(f'{self.url_api}/api/offers', headers=self._headers(),
-                             params={'shop_skus': shop_sku, 'max': 1}, timeout=10)
-            r.raise_for_status()
-            data = r.json()
-            offers = data.get('offers', [])
-            if offers:
-                return int(offers[0].get('quantity', 0))
-            return None
-        except Exception:
-            return None
 
     def update_price(self, offer_id: str, price: float, shop_sku: str = '', quantity: int = None, description: str = None) -> dict:
         """Actualiza precio via OF24 (POST /api/offers). Incluye quantity para no resetear stock y description para no borrarla."""
@@ -223,8 +213,8 @@ class MiraklClient(MarketplaceClient):
             # Log exactamente lo que enviamos
             logger.info(f'UPDATE_PRICE: shop_sku={shop_sku}, quantity={quantity}, payload={payload}')
 
-            r = requests.post(f'{self.url_api}/api/offers', headers=self._headers(),
-                              json=payload, timeout=10)
+            r = self._session.post(f'{self.url_api}/api/offers',
+                                   json=payload, timeout=30)
 
             logger.info(f'UPDATE_PRICE response: status={r.status_code}, body={r.text[:200]}')
 

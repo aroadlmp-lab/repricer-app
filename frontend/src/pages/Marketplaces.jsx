@@ -28,6 +28,8 @@ export default function Marketplaces({ onRefresh }) {
   const startEdit = (mp) => {
     setEditingId(mp.id)
     setForm({ nombre: mp.nombre, url_api: mp.url_api, api_key: '', shop_id: mp.shop_id || '', shop_name: mp.shop_name || '', channel_code: mp.channel_code || '', ignorar_state_code: mp.ignorar_state_code || false, margen_competencia: mp.margen_competencia || 0 })
+    setTestResult({})
+    setSyncResult({})
   }
 
   const testConnection = async (id) => {
@@ -94,7 +96,7 @@ export default function Marketplaces({ onRefresh }) {
           <button type="submit" className="bg-gray-900 text-white px-4 py-2 rounded text-sm">
             {editingId ? 'Actualizar' : 'Crear'}
           </button>
-          {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '', ignorar_state_code: false, margen_competencia: 0 }) }}
+          {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '', ignorar_state_code: false, margen_competencia: 0 }); setTestResult({}); setSyncResult({}) }}
             className="text-gray-500 text-sm">Cancelar</button>}
         </div>
       </form>
