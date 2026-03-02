@@ -35,7 +35,7 @@ def crear():
 def actualizar(id):
     mp = Marketplace.query.get_or_404(id)
     data = request.json
-    for field in ('nombre', 'tipo', 'url_api', 'shop_id', 'shop_name', 'channel_code', 'ignorar_state_code', 'activo'):
+    for field in ('nombre', 'tipo', 'url_api', 'shop_id', 'shop_name', 'channel_code', 'ignorar_state_code', 'margen_competencia', 'activo'):
         if field in data:
             setattr(mp, field, data[field])
     if data.get('api_key'):

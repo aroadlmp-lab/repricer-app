@@ -109,6 +109,8 @@ def _add_missing_columns():
         db.session.execute(text('ALTER TABLE marketplaces ADD COLUMN channel_code VARCHAR(20)'))
     if 'ignorar_state_code' not in mp_columns:
         db.session.execute(text('ALTER TABLE marketplaces ADD COLUMN ignorar_state_code BOOLEAN DEFAULT FALSE'))
+    if 'margen_competencia' not in mp_columns:
+        db.session.execute(text('ALTER TABLE marketplaces ADD COLUMN margen_competencia FLOAT DEFAULT 0'))
     oferta_columns = [c['name'] for c in inspector.get_columns('ofertas')]
     if 'descripcion' not in oferta_columns:
         db.session.execute(text('ALTER TABLE ofertas ADD COLUMN descripcion TEXT'))

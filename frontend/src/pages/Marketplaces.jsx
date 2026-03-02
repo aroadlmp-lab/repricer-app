@@ -3,7 +3,7 @@ import api from '../api'
 
 export default function Marketplaces({ onRefresh }) {
   const [items, setItems] = useState([])
-  const [form, setForm] = useState({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '', ignorar_state_code: false })
+  const [form, setForm] = useState({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '', ignorar_state_code: false, margen_competencia: 0 })
   const [editingId, setEditingId] = useState(null)
   const [testResult, setTestResult] = useState({})
   const [syncResult, setSyncResult] = useState({})
@@ -19,7 +19,7 @@ export default function Marketplaces({ onRefresh }) {
     } else {
       await api.post('/marketplaces', form)
     }
-    setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '', ignorar_state_code: false })
+    setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '', ignorar_state_code: false, margen_competencia: 0 })
     setEditingId(null)
     load()
     onRefresh()
@@ -27,7 +27,7 @@ export default function Marketplaces({ onRefresh }) {
 
   const startEdit = (mp) => {
     setEditingId(mp.id)
-    setForm({ nombre: mp.nombre, url_api: mp.url_api, api_key: '', shop_id: mp.shop_id || '', shop_name: mp.shop_name || '', channel_code: mp.channel_code || '', ignorar_state_code: mp.ignorar_state_code || false })
+    setForm({ nombre: mp.nombre, url_api: mp.url_api, api_key: '', shop_id: mp.shop_id || '', shop_name: mp.shop_name || '', channel_code: mp.channel_code || '', ignorar_state_code: mp.ignorar_state_code || false, margen_competencia: mp.margen_competencia || 0 })
   }
 
   const testConnection = async (id) => {
@@ -83,11 +83,18 @@ export default function Marketplaces({ onRefresh }) {
             className="w-4 h-4 rounded" />
           Ignorar estado estético (competir contra todos los reacondicionados, excluye Nuevo)
         </label>
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-gray-700 whitespace-nowrap">Margen competencia (%):</label>
+          <input type="number" step="0.5" min="0" max="20" value={form.margen_competencia}
+            onChange={e => setForm({ ...form, margen_competencia: parseFloat(e.target.value) || 0 })}
+            className="border rounded px-3 py-2 text-sm w-24" />
+          <span className="text-xs text-gray-400">0 = estándar (−0.01€). &gt;0 = % por debajo del competidor (ej: 5 para Pixmania)</span>
+        </div>
         <div className="flex gap-2">
           <button type="submit" className="bg-gray-900 text-white px-4 py-2 rounded text-sm">
             {editingId ? 'Actualizar' : 'Crear'}
           </button>
-          {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '', ignorar_state_code: false }) }}
+          {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '', ignorar_state_code: false, margen_competencia: 0 }) }}
             className="text-gray-500 text-sm">Cancelar</button>}
         </div>
       </form>

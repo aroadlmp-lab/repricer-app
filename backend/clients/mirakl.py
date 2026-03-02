@@ -136,9 +136,11 @@ class MiraklClient(MarketplaceClient):
                     s_name = offer.get('shop_name', '')
                     state = offer.get('state_code', '')
                     is_mine = bool(self.shop_name and s_name == self.shop_name)
+                    total_price = float(offer.get('total_price', price))
                     all_product_offers.append({
                         'shop_name': s_name,
                         'price': price,
+                        'total_price': total_price,
                         'state_code': state,
                         'is_mine': is_mine,
                     })
