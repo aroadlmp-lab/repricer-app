@@ -34,12 +34,15 @@ def run():
     def generate():
         while True:
             try:
-                item = q.get(timeout=310)  # Margen ligeramente inferior al timeout de Gunicorn (300s)
+                item = q.get(timeout=5)  # Corto para enviar keepalives frecuentes
                 if item is None:
                     break
                 yield json.dumps(item) + '\n'
             except queue.Empty:
-                break
+                if not t.is_alive():
+                    break
+                # Keepalive: evita que Gunicorn mate el worker por inactividad
+                yield json.dumps({'type': 'keepalive'}) + '\n'
 
     return Response(
         stream_with_context(generate()),

@@ -100,7 +100,7 @@ class MiraklClient(MarketplaceClient):
                                       params={'product_ids': product_sku}, timeout=15)
                 if r.status_code == 429:
                     try:
-                        wait = int(r.headers.get('Retry-After', 5 * (attempt + 1)))
+                        wait = min(int(r.headers.get('Retry-After', 5 * (attempt + 1))), 30)
                     except (ValueError, TypeError):
                         wait = 5 * (attempt + 1)
                     logger.warning(f'P11 rate limit (429) for {product_sku}, waiting {wait}s (attempt {attempt+1}/{max_retries})')
