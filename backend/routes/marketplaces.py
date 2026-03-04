@@ -62,14 +62,13 @@ def test_conexion(id):
 
 @bp.route('/<int:id>/raw', methods=['GET'])
 def raw_offers(id):
-    import requests as req
     mp = Marketplace.query.get_or_404(id)
     client = get_client(mp)
     if client.mock_mode:
         return jsonify({'error': 'mock mode'})
     try:
-        r = req.get(f'{client.url_api}/api/offers', headers=client._headers(),
-                    params={'max': 2}, timeout=15)
+        r = client._session.get(f'{client.url_api}/api/offers',
+                                params={'max': 2}, timeout=15)
         r.raise_for_status()
         return jsonify(r.json())
     except Exception as e:
@@ -78,18 +77,17 @@ def raw_offers(id):
 
 @bp.route('/<int:id>/rawp11/<string:product_id>', methods=['GET'])
 def raw_p11(id, product_id):
-    import requests as req
     mp = Marketplace.query.get_or_404(id)
     client = get_client(mp)
     if client.mock_mode:
         return jsonify({'error': 'mock mode'})
     try:
-        r = req.get(f'{client.url_api}/api/products/offers', headers=client._headers(),
-                    params={'product_ids': product_id}, timeout=15)
+        r = client._session.get(f'{client.url_api}/api/products/offers',
+                                params={'product_ids': product_id}, timeout=15)
         r.raise_for_status()
         return jsonify(r.json())
     except Exception as e:
-        return jsonify({'error': str(e), 'status_code': getattr(r, 'status_code', None)}), 500
+        return jsonify({'error': str(e), 'status_code': getattr(e, 'response', None) and getattr(e.response, 'status_code', None)}), 500
 
 
 @bp.route('/<int:id>/sync', methods=['POST'])
