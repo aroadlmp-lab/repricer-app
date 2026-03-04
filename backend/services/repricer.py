@@ -1,7 +1,6 @@
 import time
 import logging
 from typing import Optional
-from datetime import datetime, timezone
 from extensions import db, decrypt_value
 from models import Marketplace, Oferta, HistoricoPrecios, Ejecucion
 from clients.mirakl import MiraklClient
@@ -9,7 +8,7 @@ from clients.mirakl import MiraklClient
 logger = logging.getLogger(__name__)
 
 
-def get_client(marketplace: Marketplace) -> MiraklClient:
+def get_client(marketplace: Marketplace):
     api_key = None
     if marketplace.api_key_encrypted:
         try:
@@ -57,13 +56,37 @@ def _execute_repricer(progress_callback=None):
             if progress_callback:
                 progress_callback({'type': 'total', 'marketplace': mp.nombre, 'total': total})
 
+            # Para ignorar_state_code: pre-construir mapa producto_id -> set(product_skus)
+            # para poder consultar P11 de todos los estados del mismo producto físico y
+            # compararlos entre sí (funcional vs muy bueno vs como nuevo).
+            # En Phonehouse cada estado es un product_sku distinto en Mirakl (ej: #RN0007, vs #RN0007,,)
+            # y P11 solo devuelve el estado consultado, por lo que sin este merge se ignoran
+            # competidores de otros estados que podrían ganar la buybox.
+            producto_variants = {}
+            if mp.ignorar_state_code:
+                all_mp_offers = Oferta.query.filter(
+                    Oferta.marketplace_id == mp.id,
+                    Oferta.product_sku.isnot(None),
+                ).all()
+                for o in all_mp_offers:
+                    if o.producto_id and o.product_sku:
+                        producto_variants.setdefault(o.producto_id, set()).add(o.product_sku)
+                logger.info(f'REPRICER {mp.nombre}: ignorar_state_code=True, {len(producto_variants)} productos con variantes de estado')
+
+            # Cache de P11 por product_sku para no repetir la misma llamada
+            p11_cache = {}
+
             for oferta in ofertas:
                 procesadas += 1
                 try:
                     offer_id = oferta.offer_id_externo or str(oferta.id)
                     product_sku = oferta.product_sku or ''
-                    time.sleep(0.3)  # Pausa entre llamadas P11 para no superar el rate limit
-                    bb_info = client.get_buybox_info(offer_id, product_sku)
+
+                    # P11 call con cache para evitar duplicados
+                    if product_sku not in p11_cache:
+                        time.sleep(0.3)  # Rate limiting
+                        p11_cache[product_sku] = client.get_buybox_info(offer_id, product_sku)
+                    bb_info = p11_cache[product_sku]
 
                     if bb_info.get('error'):
                         errores_list.append(f'Oferta {oferta.id}: buybox error: {bb_info["error"]}')
@@ -73,7 +96,34 @@ def _execute_repricer(progress_callback=None):
                         # No hay competidores o no se pudo obtener info
                         continue
 
-                    all_offers = bb_info.get('all_offers', [])
+                    # Comenzar con las ofertas del estado propio (de P11 original)
+                    all_offers = list(bb_info.get('all_offers', []))
+
+                    # Extraer nuestro precio ANTES de fusionar otros estados,
+                    # para que my_total refleje solo nuestra oferta del estado actual
+                    original_my_offers = [o for o in all_offers if o.get('is_mine', False)]
+                    my_total_price = (
+                        original_my_offers[0].get('total_price', original_my_offers[0]['price'])
+                        if original_my_offers
+                        else bb_info.get('my_price', 0)
+                    )
+
+                    # Para ignorar_state_code: fusionar P11 de los otros estados del mismo producto.
+                    # Esto permite ver si un competidor de distinto estado (ej: muy bueno) está
+                    # más barato y gana la buybox, algo invisible si solo consultamos nuestro estado.
+                    if mp.ignorar_state_code and oferta.producto_id and product_sku:
+                        related_skus = producto_variants.get(oferta.producto_id, set()) - {product_sku}
+                        if related_skus:
+                            logger.info(f'REPRICER {mp.nombre}: oferta {oferta.id} ({product_sku}) '
+                                        f'merging cross-state P11: {related_skus}')
+                        for rel_sku in sorted(related_skus):
+                            if rel_sku not in p11_cache:
+                                time.sleep(0.3)
+                                p11_cache[rel_sku] = client.get_buybox_info('', rel_sku)
+                            rel_bb = p11_cache[rel_sku]
+                            if not rel_bb.get('error'):
+                                all_offers.extend(rel_bb.get('all_offers', []))
+
                     # Filter competitors by state_code
                     if mp.ignorar_state_code:
                         # Phonehouse-style: compete against all refurbished, exclude Nuevo (state_code 11)
@@ -82,11 +132,9 @@ def _execute_repricer(progress_callback=None):
                         # Default: only compare against same state
                         all_offers = [o for o in all_offers if o.get('state_code') == oferta.state_code]
 
-                    # Recompute has_buybox based on the filtered offers to avoid mismatch:
-                    # bb_info['has_buybox'] was computed before state filtering, so a cheaper
-                    # excluded competitor (e.g. NUEVO in Phonehouse) could wrongly set has_buybox=False
-                    # while the filtered set only has more expensive competitors above us.
-                    # Use total_price (price + shipping) for accurate market comparison.
+                    # Recompute has_buybox con el conjunto fusionado y filtrado.
+                    # En ignorar_state_code usamos my_total_price del estado propio (extraído antes
+                    # del merge) para comparar contra el mejor precio del mercado unificado.
                     bb_info_calc = dict(bb_info)
                     competitor_totals_filtered = [
                         o.get('total_price', o['price']) for o in all_offers
@@ -96,26 +144,21 @@ def _execute_repricer(progress_callback=None):
                         o['price'] for o in all_offers
                         if not o.get('is_mine', False) and o.get('price', 0) > 0
                     ]
-                    my_offers_filtered = [o for o in all_offers if o.get('is_mine', False)]
-                    my_total_filtered = my_offers_filtered[0].get('total_price', my_offers_filtered[0]['price']) if my_offers_filtered else bb_info.get('my_price', 0)
                     if competitor_totals_filtered:
                         best_total = min(competitor_totals_filtered)
                         best_price_display = min(competitor_prices_filtered)
-                        bb_info_calc['has_buybox'] = my_total_filtered > 0 and my_total_filtered <= best_total
-                        bb_info_calc['best_price'] = round(best_price_display, 2)  # price sin shipping para display
+                        bb_info_calc['has_buybox'] = my_total_price > 0 and my_total_price <= best_total
+                        bb_info_calc['best_price'] = round(best_price_display, 2)
                     elif all_offers:
-                        # Only our own offers remain after filtering → we have the buybox
-                        bb_info_calc['has_buybox'] = my_total_filtered > 0
+                        # Solo quedan nuestras propias ofertas → tenemos la buybox
+                        bb_info_calc['has_buybox'] = my_total_price > 0
 
                     margen = getattr(mp, 'margen_competencia', 0.0) or 0.0
                     nuevo_precio = _calcular_precio(oferta, bb_info_calc, all_offers, margen=margen)
 
-                    # Siempre actualizar estado buybox y precio buybox usando datos
-                    # filtrados (bb_info_calc) para que el display sea consistente
-                    # con la lógica de cálculo (excluye NUEVO en ignorar_state_code)
+                    # Actualizar estado buybox y precio buybox con datos del mercado unificado
                     oferta.tiene_buybox = bb_info_calc['has_buybox']
                     if competitor_prices_filtered:
-                        # Solo guardar el mejor precio del segmento filtrado (REAC, no NUEVO)
                         oferta.precio_buybox = bb_info_calc['best_price']
 
                     if nuevo_precio and nuevo_precio != oferta.precio_actual:
@@ -123,8 +166,6 @@ def _execute_repricer(progress_callback=None):
                         if oferta.producto:
                             shop_sku = oferta.producto.sku
                         # Use quantity from Mirakl (fetched at start), not from DB.
-                        # Diferenciar "no encontrado" (posible filtro por channel_code)
-                        # de "encontrado con stock 0" (realmente sin stock).
                         if shop_sku in sku_to_quantity:
                             mirakl_quantity = sku_to_quantity[shop_sku]
                         else:
@@ -136,13 +177,13 @@ def _execute_repricer(progress_callback=None):
                             description=oferta.descripcion,
                         )
                         if result.get('success') and not result.get('skipped'):
-                            motivo = _generar_motivo(oferta, bb_info, nuevo_precio)
+                            motivo = _generar_motivo(oferta, bb_info_calc, nuevo_precio)
                             hist = HistoricoPrecios(
                                 oferta_id=oferta.id,
                                 precio_anterior=oferta.precio_actual,
                                 precio_nuevo=nuevo_precio,
                                 motivo=motivo,
-                                tenia_buybox=bb_info['has_buybox'],
+                                tenia_buybox=bb_info_calc['has_buybox'],
                             )
                             db.session.add(hist)
                             oferta.precio_actual = nuevo_precio
