@@ -102,12 +102,19 @@ def _execute_repricer(progress_callback=None):
                     # Comenzar con las ofertas del estado propio (de P11 original)
                     all_offers = list(bb_info.get('all_offers', []))
 
-                    # Extraer nuestro precio ANTES de fusionar otros estados,
-                    # para que my_total refleje solo nuestra oferta del estado actual
+                    # Extraer nuestro precio ANTES de fusionar otros estados.
+                    # Cuando hay múltiples ofertas propias (ej: muy bueno + funcional del mismo
+                    # vendedor en el mismo P11), buscar la que coincide con oferta.precio_actual
+                    # para no confundir estados y calcular has_buybox incorrectamente.
                     original_my_offers = [o for o in all_offers if o.get('is_mine', False)]
+                    matching_mine = [
+                        o for o in original_my_offers
+                        if abs(o.get('total_price', o.get('price', 0)) - oferta.precio_actual) < 0.02
+                    ]
+                    my_offer = matching_mine[0] if matching_mine else (original_my_offers[0] if original_my_offers else None)
                     my_total_price = (
-                        original_my_offers[0].get('total_price', original_my_offers[0]['price'])
-                        if original_my_offers
+                        my_offer.get('total_price', my_offer['price'])
+                        if my_offer
                         else bb_info.get('my_price', 0)
                     )
 
