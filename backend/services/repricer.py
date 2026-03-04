@@ -59,22 +59,21 @@ def _execute_repricer(progress_callback=None):
             # Para ignorar_state_code: pre-construir mapa base_sku -> set(product_skus)
             # para poder consultar P11 de todos los estados del mismo producto físico y
             # compararlos entre sí (funcional vs muy bueno vs como nuevo).
-            # En Phonehouse cada estado es un product_sku distinto en Mirakl con sufijo de comas
-            # (ej: #RN0007, vs #RN0007,,). Usamos rstrip(',') como clave base para enlazarlos,
-            # lo que funciona aunque el shop_sku también lleve comas (Productos distintos en BD).
-            producto_variants = {}  # base_sku -> set(full product_skus)
+            # Phonehouse usa product_ids distintos para cada condición del mismo modelo,
+            # así que enlazamos por EAN (mismo EAN = mismo modelo físico, distinta condición).
+            producto_variants = {}  # ean -> set(product_skus) para fusión cross-estado
             if mp.ignorar_state_code:
                 all_mp_offers = Oferta.query.filter(
                     Oferta.marketplace_id == mp.id,
                     Oferta.product_sku.isnot(None),
                 ).all()
                 for o in all_mp_offers:
-                    if o.product_sku:
-                        base = o.product_sku.rstrip(',')
-                        producto_variants.setdefault(base, set()).add(o.product_sku)
-                multi = {b: s for b, s in producto_variants.items() if len(s) > 1}
+                    if o.product_sku and o.producto and o.producto.ean:
+                        ean = o.producto.ean
+                        producto_variants.setdefault(ean, set()).add(o.product_sku)
+                multi = {e: s for e, s in producto_variants.items() if len(s) > 1}
                 logger.info(f'REPRICER {mp.nombre}: ignorar_state_code=True, '
-                            f'{len(producto_variants)} bases, {len(multi)} con multiples estados: {multi}')
+                            f'{len(producto_variants)} EANs, {len(multi)} con multiples product_skus: {multi}')
 
             # Cache de P11 por product_sku para no repetir la misma llamada
             p11_cache = {}
@@ -129,10 +128,10 @@ def _execute_repricer(progress_callback=None):
                     # Esto permite ver si un competidor de distinto estado (ej: muy bueno) está
                     # más barato y gana la buybox, algo invisible si solo consultamos nuestro estado.
                     if mp.ignorar_state_code and product_sku:
-                        base = product_sku.rstrip(',')
-                        related_skus = producto_variants.get(base, set()) - {product_sku}
+                        ean = oferta.producto.ean if oferta.producto else ''
+                        related_skus = (producto_variants.get(ean, set()) - {product_sku}) if ean else set()
                         logger.info(f'REPRICER {mp.nombre}: oferta {oferta.id} psku={product_sku!r} '
-                                    f'base={base!r} related={related_skus} '
+                                    f'ean={ean!r} related={related_skus} '
                                     f'has_buybox_raw={bb_info.get("has_buybox")} my_total={my_total_price}')
                         for rel_sku in sorted(related_skus):
                             if rel_sku not in p11_cache:
