@@ -56,22 +56,25 @@ def _execute_repricer(progress_callback=None):
             if progress_callback:
                 progress_callback({'type': 'total', 'marketplace': mp.nombre, 'total': total})
 
-            # Para ignorar_state_code: pre-construir mapa producto_id -> set(product_skus)
+            # Para ignorar_state_code: pre-construir mapa base_sku -> set(product_skus)
             # para poder consultar P11 de todos los estados del mismo producto físico y
             # compararlos entre sí (funcional vs muy bueno vs como nuevo).
-            # En Phonehouse cada estado es un product_sku distinto en Mirakl (ej: #RN0007, vs #RN0007,,)
-            # y P11 solo devuelve el estado consultado, por lo que sin este merge se ignoran
-            # competidores de otros estados que podrían ganar la buybox.
-            producto_variants = {}
+            # En Phonehouse cada estado es un product_sku distinto en Mirakl con sufijo de comas
+            # (ej: #RN0007, vs #RN0007,,). Usamos rstrip(',') como clave base para enlazarlos,
+            # lo que funciona aunque el shop_sku también lleve comas (Productos distintos en BD).
+            producto_variants = {}  # base_sku -> set(full product_skus)
             if mp.ignorar_state_code:
                 all_mp_offers = Oferta.query.filter(
                     Oferta.marketplace_id == mp.id,
                     Oferta.product_sku.isnot(None),
                 ).all()
                 for o in all_mp_offers:
-                    if o.producto_id and o.product_sku:
-                        producto_variants.setdefault(o.producto_id, set()).add(o.product_sku)
-                logger.info(f'REPRICER {mp.nombre}: ignorar_state_code=True, {len(producto_variants)} productos con variantes de estado')
+                    if o.product_sku:
+                        base = o.product_sku.rstrip(',')
+                        producto_variants.setdefault(base, set()).add(o.product_sku)
+                multi = {b: s for b, s in producto_variants.items() if len(s) > 1}
+                logger.info(f'REPRICER {mp.nombre}: ignorar_state_code=True, '
+                            f'{len(producto_variants)} bases, {len(multi)} con multiples estados: {multi}')
 
             # Cache de P11 por product_sku para no repetir la misma llamada
             p11_cache = {}
@@ -111,11 +114,12 @@ def _execute_repricer(progress_callback=None):
                     # Para ignorar_state_code: fusionar P11 de los otros estados del mismo producto.
                     # Esto permite ver si un competidor de distinto estado (ej: muy bueno) está
                     # más barato y gana la buybox, algo invisible si solo consultamos nuestro estado.
-                    if mp.ignorar_state_code and oferta.producto_id and product_sku:
-                        related_skus = producto_variants.get(oferta.producto_id, set()) - {product_sku}
-                        if related_skus:
-                            logger.info(f'REPRICER {mp.nombre}: oferta {oferta.id} ({product_sku}) '
-                                        f'merging cross-state P11: {related_skus}')
+                    if mp.ignorar_state_code and product_sku:
+                        base = product_sku.rstrip(',')
+                        related_skus = producto_variants.get(base, set()) - {product_sku}
+                        logger.info(f'REPRICER {mp.nombre}: oferta {oferta.id} psku={product_sku!r} '
+                                    f'base={base!r} related={related_skus} '
+                                    f'has_buybox_raw={bb_info.get("has_buybox")} my_total={my_total_price}')
                         for rel_sku in sorted(related_skus):
                             if rel_sku not in p11_cache:
                                 time.sleep(0.3)
@@ -155,6 +159,11 @@ def _execute_repricer(progress_callback=None):
 
                     margen = getattr(mp, 'margen_competencia', 0.0) or 0.0
                     nuevo_precio = _calcular_precio(oferta, bb_info_calc, all_offers, margen=margen)
+                    logger.info(f'REPRICER {mp.nombre}: oferta {oferta.id} '
+                                f'has_buybox={bb_info_calc["has_buybox"]} '
+                                f'best={bb_info_calc.get("best_price")} '
+                                f'actual={oferta.precio_actual} min={oferta.precio_min} max={oferta.precio_max} '
+                                f'nuevo={nuevo_precio}')
 
                     # Actualizar estado buybox y precio buybox con datos del mercado unificado
                     oferta.tiene_buybox = bb_info_calc['has_buybox']
