@@ -107,16 +107,23 @@ def _execute_repricer(progress_callback=None):
                     # vendedor en el mismo P11), buscar la que coincide con oferta.precio_actual
                     # para no confundir estados y calcular has_buybox incorrectamente.
                     original_my_offers = [o for o in all_offers if o.get('is_mine', False)]
+                    # Buscar nuestra oferta específica por 'price' (precio unitario sin envío),
+                    # que coincide con oferta.precio_actual. Usar total_price para el matching
+                    # era menos fiable porque puede incluir gastos de envío variables.
                     matching_mine = [
                         o for o in original_my_offers
-                        if abs(o.get('total_price', o.get('price', 0)) - oferta.precio_actual) < 0.02
+                        if abs(o.get('price', 0) - oferta.precio_actual) < 0.02
                     ]
                     my_offer = matching_mine[0] if matching_mine else (original_my_offers[0] if original_my_offers else None)
                     my_total_price = (
                         my_offer.get('total_price', my_offer['price'])
                         if my_offer
-                        else bb_info.get('my_price', 0)
+                        else oferta.precio_actual  # fallback directo si no encontramos la oferta en P11
                     )
+                    logger.info(f'REPRICER {mp.nombre}: oferta {oferta.id} '
+                                f'my_offers_count={len(original_my_offers)} '
+                                f'matching={len(matching_mine)} '
+                                f'my_total={my_total_price} precio_actual={oferta.precio_actual}')
 
                     # Para ignorar_state_code: fusionar P11 de los otros estados del mismo producto.
                     # Esto permite ver si un competidor de distinto estado (ej: muy bueno) está
