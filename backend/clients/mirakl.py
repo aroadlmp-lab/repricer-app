@@ -1,5 +1,6 @@
 import random
 import logging
+import time
 from typing import Optional, List
 import requests
 from .base import MarketplaceClient
@@ -40,54 +41,68 @@ class MiraklClient(MarketplaceClient):
         all_offers = []
         offset = 0
         while True:
-            try:
-                r = self._session.get(f'{self.url_api}/api/offers',
-                                      params={'max': 100, 'offset': offset}, timeout=30)
-                r.raise_for_status()
-                data = r.json()
-                offers = data.get('offers', [])
-                if offset == 0:
-                    logger.info(f'get_offers total_count={data.get("total_count")} total_results={data.get("total_results")} offset=0')
-                if not offers:
+            page_offers = None
+            for attempt in range(3):
+                try:
+                    r = self._session.get(f'{self.url_api}/api/offers',
+                                          params={'max': 100, 'offset': offset}, timeout=30)
+                    if r.status_code == 429:
+                        try:
+                            wait = min(int(r.headers.get('Retry-After', 10 * (attempt + 1))), 60)
+                        except (ValueError, TypeError):
+                            wait = 10 * (attempt + 1)
+                        logger.warning(f'get_offers rate limit (429) at offset={offset}, waiting {wait}s (attempt {attempt+1}/3)')
+                        time.sleep(wait)
+                        continue
+                    r.raise_for_status()
+                    data = r.json()
+                    if offset == 0:
+                        logger.info(f'get_offers total_count={data.get("total_count")} offset=0')
+                    page_offers = data.get('offers', [])
                     break
-                for o in offers:
-                    # Filter by channel if configured
-                    if self.channel_code:
-                        channels = o.get('channels', [])
-                        if self.channel_code not in channels:
-                            continue
+                except Exception as e:
+                    logger.error(f'get_offers error at offset={offset} attempt {attempt+1}: {e}', exc_info=True)
+                    if attempt < 2:
+                        time.sleep(3)
 
-                    # Extract price: prefer channel-specific price from all_prices
-                    price = float(o.get('price', 0))
-                    if self.channel_code and o.get('all_prices'):
+            if not page_offers:
+                break
+
+            for o in page_offers:
+                # Filter by channel if configured
+                if self.channel_code:
+                    channels = o.get('channels', [])
+                    if self.channel_code not in channels:
+                        continue
+
+                # Extract price: prefer channel-specific price from all_prices
+                price = float(o.get('price', 0))
+                if self.channel_code and o.get('all_prices'):
+                    for ap in o['all_prices']:
+                        if ap.get('channel_code') == self.channel_code:
+                            price = float(ap.get('price', price))
+                            break
+                    else:
                         for ap in o['all_prices']:
-                            if ap.get('channel_code') == self.channel_code:
+                            if ap.get('channel_code') is None:
                                 price = float(ap.get('price', price))
                                 break
-                        else:
-                            for ap in o['all_prices']:
-                                if ap.get('channel_code') is None:
-                                    price = float(ap.get('price', price))
-                                    break
 
-                    all_offers.append({
-                        'offer_id': str(o.get('offer_id', o.get('id', ''))),
-                        'sku': o.get('shop_sku', ''),
-                        'product_sku': o.get('product_sku', ''),
-                        'product_title': o.get('product_title', o.get('description', '')),
-                        'description': o.get('description', ''),
-                        'price': price,
-                        'stock': int(o.get('quantity', 0)),
-                        'state_code': o.get('state_code', o.get('offer_state_code', '')),
-                        'ean': o.get('product_references', [{}])[0].get('reference', '') if o.get('product_references') else '',
-                    })
-                if len(offers) < 100:
-                    break
-                offset += 100
-                logger.info(f'get_offers fetching next page offset={offset}')
-            except Exception as e:
-                logger.error(f'get_offers error at offset={offset}: {e}', exc_info=True)
+                all_offers.append({
+                    'offer_id': str(o.get('offer_id', o.get('id', ''))),
+                    'sku': o.get('shop_sku', ''),
+                    'product_sku': o.get('product_sku', ''),
+                    'product_title': o.get('product_title', o.get('description', '')),
+                    'description': o.get('description', ''),
+                    'price': price,
+                    'stock': int(o.get('quantity', 0)),
+                    'state_code': o.get('state_code', o.get('offer_state_code', '')),
+                    'ean': o.get('product_references', [{}])[0].get('reference', '') if o.get('product_references') else '',
+                })
+            if len(page_offers) < 100:
                 break
+            offset += 100
+            logger.info(f'get_offers fetching next page offset={offset}')
         return all_offers
 
     def get_buybox_info(self, offer_id: str, product_sku: str = '') -> dict:
@@ -96,7 +111,6 @@ class MiraklClient(MarketplaceClient):
             return self._mock_buybox(offer_id)
         if not product_sku:
             return {'has_buybox': False, 'best_price': 0, 'my_price': 0, 'competitors': 0, 'all_offers': []}
-        import time
         max_retries = 3
         for attempt in range(max_retries):
             try:
