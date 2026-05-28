@@ -46,6 +46,8 @@ class MiraklClient(MarketplaceClient):
                 r.raise_for_status()
                 data = r.json()
                 offers = data.get('offers', [])
+                if offset == 0:
+                    logger.info(f'get_offers total_count={data.get("total_count")} total_results={data.get("total_results")} offset=0')
                 if not offers:
                     break
                 for o in offers:
@@ -82,6 +84,7 @@ class MiraklClient(MarketplaceClient):
                 if len(offers) < 100:
                     break
                 offset += 100
+                logger.info(f'get_offers fetching next page offset={offset}')
             except Exception as e:
                 logger.error(f'get_offers error at offset={offset}: {e}', exc_info=True)
                 break
