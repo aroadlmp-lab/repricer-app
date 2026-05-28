@@ -116,7 +116,9 @@ export default function Marketplaces({ onRefresh }) {
               )}
               {syncResult[mp.id] && (
                 <span className={`text-xs px-2 py-0.5 rounded ${syncResult[mp.id].status === 'ok' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                  {syncResult[mp.id].status === 'ok' ? `${syncResult[mp.id].nuevas} nuevas, ${syncResult[mp.id].actualizadas} actualizadas` : syncResult[mp.id].message}
+                  {syncResult[mp.id].status === 'ok'
+                    ? `${syncResult[mp.id].ofertas_api} de API · ${syncResult[mp.id].nuevas} nuevas · ${syncResult[mp.id].actualizadas} actualizadas · ${syncResult[mp.id].ignoradas_sin_stock} sin stock`
+                    : syncResult[mp.id].message}
                 </span>
               )}
               <button onClick={() => syncOffers(mp.id)} disabled={syncing[mp.id]}

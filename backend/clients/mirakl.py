@@ -82,7 +82,8 @@ class MiraklClient(MarketplaceClient):
                 if len(offers) < 100:
                     break
                 offset += 100
-            except Exception:
+            except Exception as e:
+                logger.error(f'get_offers error at offset={offset}: {e}', exc_info=True)
                 break
         return all_offers
 
