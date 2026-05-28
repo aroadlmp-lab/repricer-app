@@ -40,10 +40,10 @@ def actualizar(id):
     for field in ('precio_actual', 'precio_min', 'precio_max', 'stock', 'activo', 'offer_id_externo'):
         if field in data:
             setattr(o, field, data[field])
-    # Si el precio actual supera el nuevo max, ajustar
+    if o.precio_min is not None and o.precio_max is not None and o.precio_min > o.precio_max:
+        return jsonify({'error': 'precio_min no puede ser mayor que precio_max'}), 400
     if o.precio_max is not None and o.precio_actual > o.precio_max:
         o.precio_actual = o.precio_max
-    # Si el precio actual está por debajo del nuevo min, ajustar
     if o.precio_min is not None and o.precio_actual < o.precio_min:
         o.precio_actual = o.precio_min
     db.session.commit()
@@ -53,6 +53,8 @@ def actualizar(id):
 @bp.route('/bulk', methods=['PUT'])
 def bulk_update():
     items = request.json
+    if not items or not isinstance(items, list):
+        return jsonify({'error': 'Se esperaba un array JSON'}), 400
     updated = []
     for item in items:
         o = Oferta.query.get(item['id'])

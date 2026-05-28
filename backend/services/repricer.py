@@ -171,7 +171,7 @@ def _execute_repricer(progress_callback=None):
                         bb_info_calc['has_buybox'] = my_total_price > 0
 
                     margen = getattr(mp, 'margen_competencia', 0.0) or 0.0
-                    nuevo_precio = _calcular_precio(oferta, bb_info_calc, all_offers, margen=margen)
+                    nuevo_precio = _calcular_precio(oferta, bb_info_calc, all_offers, margen=margen, my_total_price=my_total_price)
                     logger.info(f'REPRICER {mp.nombre}: oferta {oferta.id} '
                                 f'has_buybox={bb_info_calc["has_buybox"]} '
                                 f'best={bb_info_calc.get("best_price")} '
@@ -226,9 +226,15 @@ def _execute_repricer(progress_callback=None):
                         'cambios': cambios,
                     })
 
+            if not errores_list:
+                estado = 'ok'
+            elif procesadas > len(errores_list):
+                estado = 'parcial'
+            else:
+                estado = 'error'
             db.session.add(Ejecucion(
                 marketplace_id=mp.id,
-                estado='error' if errores_list else 'ok',
+                estado=estado,
                 ofertas_procesadas=procesadas,
                 cambios_realizados=cambios,
                 errores='; '.join(errores_list) if errores_list else None,
@@ -255,7 +261,7 @@ def _generar_motivo(oferta, bb_info, nuevo_precio):
         return f'Subir manteniendo mejor posicion (mejor precio competidor: {best})'
 
 
-def _calcular_precio(oferta: Oferta, bb_info: dict, all_offers: list = None, margen: float = 0.0) -> Optional[float]:
+def _calcular_precio(oferta: Oferta, bb_info: dict, all_offers: list = None, margen: float = 0.0, my_total_price: float = None) -> Optional[float]:
     """Calcula el nuevo precio óptimo.
 
     margen (%) — margen adicional por debajo del competidor para compensar
@@ -281,7 +287,7 @@ def _calcular_precio(oferta: Oferta, bb_info: dict, all_offers: list = None, mar
         return None
     else:
         # Tenemos la mejor posicion: subir hasta el siguiente competidor respetando el margen
-        next_competitor = _find_next_competitor_price(precio, all_offers or [])
+        next_competitor = _find_next_competitor_price(my_total_price if my_total_price else precio, all_offers or [])
         if next_competitor:
             nuevo = round(min(next_competitor * factor - 0.01, precio_max), 2)
             if margen > 0:

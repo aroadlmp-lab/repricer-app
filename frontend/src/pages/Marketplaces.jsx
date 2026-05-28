@@ -14,15 +14,19 @@ export default function Marketplaces({ onRefresh }) {
 
   const submit = async (e) => {
     e.preventDefault()
-    if (editingId) {
-      await api.put(`/marketplaces/${editingId}`, form)
-    } else {
-      await api.post('/marketplaces', form)
+    try {
+      if (editingId) {
+        await api.put(`/marketplaces/${editingId}`, form)
+      } else {
+        await api.post('/marketplaces', form)
+      }
+      setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '', ignorar_state_code: false, margen_competencia: 0 })
+      setEditingId(null)
+      load()
+      onRefresh()
+    } catch (e) {
+      alert(e.response?.data?.error || 'Error al guardar marketplace')
     }
-    setForm({ nombre: '', url_api: '', api_key: '', shop_id: '', shop_name: '', channel_code: '', ignorar_state_code: false, margen_competencia: 0 })
-    setEditingId(null)
-    load()
-    onRefresh()
   }
 
   const startEdit = (mp) => {
@@ -34,18 +38,18 @@ export default function Marketplaces({ onRefresh }) {
 
   const testConnection = async (id) => {
     const r = await api.post(`/marketplaces/${id}/test`)
-    setTestResult({ ...testResult, [id]: r.data })
+    setTestResult(prev => ({ ...prev, [id]: r.data }))
   }
 
   const syncOffers = async (id) => {
-    setSyncing({ ...syncing, [id]: true })
+    setSyncing(prev => ({ ...prev, [id]: true }))
     try {
       const r = await api.post(`/marketplaces/${id}/sync`)
-      setSyncResult({ ...syncResult, [id]: r.data })
+      setSyncResult(prev => ({ ...prev, [id]: r.data }))
     } catch (e) {
-      setSyncResult({ ...syncResult, [id]: { status: 'error', message: 'Error de conexion' } })
+      setSyncResult(prev => ({ ...prev, [id]: { status: 'error', message: 'Error de conexion' } }))
     }
-    setSyncing({ ...syncing, [id]: false })
+    setSyncing(prev => ({ ...prev, [id]: false }))
   }
 
   const toggleActivo = async (mp) => {

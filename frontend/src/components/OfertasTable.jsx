@@ -11,12 +11,17 @@ export default function OfertasTable({ ofertas, onRefresh }) {
   }
 
   const save = async (id) => {
-    await api.put(`/ofertas/${id}`, {
-      precio_min: values.precio_min ? Number(values.precio_min) : null,
-      precio_max: values.precio_max ? Number(values.precio_max) : null,
-    })
-    setEditing(null)
-    onRefresh()
+    try {
+      await api.put(`/ofertas/${id}`, {
+        precio_min: values.precio_min ? Number(values.precio_min) : null,
+        precio_max: values.precio_max ? Number(values.precio_max) : null,
+      })
+      setEditing(null)
+      onRefresh()
+    } catch (e) {
+      const msg = e.response?.data?.error || 'Error al guardar'
+      alert(msg)
+    }
   }
 
   const toggleActivo = async (o) => {
