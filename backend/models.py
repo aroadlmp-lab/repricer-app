@@ -77,6 +77,10 @@ class Oferta(db.Model):
     state_code = db.Column(db.String(20), nullable=True)
     tiene_buybox = db.Column(db.Boolean, default=False)
     activo = db.Column(db.Boolean, default=True)
+    cazando_minimo = db.Column(db.Boolean, default=False)
+    paso_caza = db.Column(db.Float, nullable=True)
+    precio_minimo_detectado = db.Column(db.Float, nullable=True)
+    estado_caza = db.Column(db.String(20), default='inactivo')  # inactivo, cazando, completado, abortado
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
 
@@ -105,6 +109,10 @@ class Oferta(db.Model):
             'state_code': self.state_code,
             'tiene_buybox': self.tiene_buybox,
             'activo': self.activo,
+            'cazando_minimo': self.cazando_minimo or False,
+            'paso_caza': self.paso_caza,
+            'precio_minimo_detectado': self.precio_minimo_detectado,
+            'estado_caza': self.estado_caza or 'inactivo',
             'updated_at': (self.updated_at.isoformat() + 'Z') if self.updated_at else None,
             'producto': self.producto.to_dict() if self.producto else None,
             'marketplace_nombre': self.marketplace.nombre if self.marketplace else None,

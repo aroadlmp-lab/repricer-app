@@ -170,13 +170,18 @@ def _execute_repricer(progress_callback=None):
                         # Solo quedan nuestras propias ofertas → tenemos la buybox
                         bb_info_calc['has_buybox'] = my_total_price > 0
 
-                    margen = getattr(mp, 'margen_competencia', 0.0) or 0.0
-                    nuevo_precio = _calcular_precio(oferta, bb_info_calc, all_offers, margen=margen, my_total_price=my_total_price)
+                    es_caza = getattr(oferta, 'cazando_minimo', False) and getattr(oferta, 'estado_caza', 'inactivo') == 'cazando'
+                    if es_caza:
+                        nuevo_precio = _calcular_precio_caza(oferta, bb_info_calc, competitor_prices_filtered)
+                    else:
+                        margen = getattr(mp, 'margen_competencia', 0.0) or 0.0
+                        nuevo_precio = _calcular_precio(oferta, bb_info_calc, all_offers, margen=margen, my_total_price=my_total_price)
                     logger.info(f'REPRICER {mp.nombre}: oferta {oferta.id} '
                                 f'has_buybox={bb_info_calc["has_buybox"]} '
                                 f'best={bb_info_calc.get("best_price")} '
                                 f'actual={oferta.precio_actual} min={oferta.precio_min} max={oferta.precio_max} '
-                                f'nuevo={nuevo_precio}')
+                                f'nuevo={nuevo_precio}'
+                                + (f' [CAZA estado={oferta.estado_caza}]' if es_caza else ''))
 
                     # Actualizar estado buybox y precio buybox con datos del mercado unificado
                     oferta.tiene_buybox = bb_info_calc['has_buybox']
@@ -199,7 +204,13 @@ def _execute_repricer(progress_callback=None):
                             description=oferta.descripcion,
                         )
                         if result.get('success') and not result.get('skipped'):
-                            motivo = _generar_motivo(oferta, bb_info_calc, nuevo_precio)
+                            if es_caza:
+                                if oferta.estado_caza == 'completado' and oferta.precio_minimo_detectado:
+                                    motivo = f'Caza completada: mínimo competidor={oferta.precio_minimo_detectado}€, subiendo a {nuevo_precio}€'
+                                else:
+                                    motivo = f'Caza: bajando {oferta.paso_caza}€/ciclo (mín. propio: {oferta.precio_min}€)'
+                            else:
+                                motivo = _generar_motivo(oferta, bb_info_calc, nuevo_precio)
                             hist = HistoricoPrecios(
                                 oferta_id=oferta.id,
                                 precio_anterior=oferta.precio_actual,
@@ -326,3 +337,38 @@ def _find_best_competitor_price(all_offers: list) -> Optional[float]:
         if o.get('price', 0) > 0 and not o.get('is_mine', False)
     ]
     return min(competitor_prices) if competitor_prices else None
+
+
+def _calcular_precio_caza(oferta: Oferta, bb_info: dict, competitor_prices_filtered: list) -> Optional[float]:
+    """Lógica de caza de mínimo: baja agresivamente hasta ganar buybox, luego sube al piso del competidor."""
+    has_buybox = bb_info['has_buybox']
+    precio_min = oferta.precio_min or 0
+    precio_max = oferta.precio_max or float('inf')
+
+    if has_buybox and competitor_prices_filtered:
+        # El competidor llegó a su mínimo y nosotros ganamos: su precio actual ES su mínimo
+        comp_min = round(min(competitor_prices_filtered), 2)
+        oferta.precio_minimo_detectado = comp_min
+        oferta.estado_caza = 'completado'
+        oferta.cazando_minimo = False
+        logger.info(f'CAZA COMPLETADA: oferta {oferta.id} precio_min_competidor={comp_min}')
+        # Subir al máximo posible justo por debajo del mínimo del competidor
+        target = round(min(comp_min - 0.01, precio_max), 2)
+        if target > oferta.precio_actual and target >= precio_min:
+            return target
+        return None
+    elif has_buybox:
+        # Sin competidores en segmento: completar sin mínimo detectado
+        oferta.estado_caza = 'completado'
+        oferta.cazando_minimo = False
+        logger.info(f'CAZA COMPLETADA: oferta {oferta.id} sin competidores en segmento filtrado')
+        return None
+    else:
+        # Seguimos sin buybox: bajar otro paso
+        nuevo = round(oferta.precio_actual - oferta.paso_caza, 2)
+        if nuevo < precio_min:
+            oferta.estado_caza = 'abortado'
+            oferta.cazando_minimo = False
+            logger.warning(f'CAZA ABORTADA: oferta {oferta.id} siguiente paso={nuevo} < precio_min={precio_min}')
+            return None
+        return nuevo

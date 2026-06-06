@@ -91,6 +91,32 @@ def eliminar_mock():
     return jsonify({'deleted': count})
 
 
+@bp.route('/<int:id>/caza', methods=['POST'])
+def iniciar_caza(id):
+    o = Oferta.query.get_or_404(id)
+    data = request.json or {}
+    paso = data.get('paso_caza')
+    if not paso or float(paso) <= 0:
+        return jsonify({'error': 'paso_caza debe ser mayor que 0'}), 400
+    if not o.activo:
+        return jsonify({'error': 'La oferta debe estar activa para iniciar la caza'}), 400
+    o.cazando_minimo = True
+    o.paso_caza = float(paso)
+    o.estado_caza = 'cazando'
+    o.precio_minimo_detectado = None
+    db.session.commit()
+    return jsonify(o.to_dict())
+
+
+@bp.route('/<int:id>/caza', methods=['DELETE'])
+def cancelar_caza(id):
+    o = Oferta.query.get_or_404(id)
+    o.cazando_minimo = False
+    o.estado_caza = 'inactivo'
+    db.session.commit()
+    return jsonify(o.to_dict())
+
+
 @bp.route('/<int:id>', methods=['DELETE'])
 def eliminar(id):
     o = Oferta.query.get_or_404(id)

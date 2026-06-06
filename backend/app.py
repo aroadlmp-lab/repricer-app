@@ -119,6 +119,14 @@ def _add_missing_columns():
         db.session.execute(text('ALTER TABLE ofertas ADD COLUMN descripcion TEXT'))
     if 'precio_buybox' not in oferta_columns:
         db.session.execute(text('ALTER TABLE ofertas ADD COLUMN precio_buybox FLOAT'))
+    if 'cazando_minimo' not in oferta_columns:
+        db.session.execute(text('ALTER TABLE ofertas ADD COLUMN cazando_minimo BOOLEAN DEFAULT FALSE'))
+    if 'paso_caza' not in oferta_columns:
+        db.session.execute(text('ALTER TABLE ofertas ADD COLUMN paso_caza FLOAT'))
+    if 'precio_minimo_detectado' not in oferta_columns:
+        db.session.execute(text('ALTER TABLE ofertas ADD COLUMN precio_minimo_detectado FLOAT'))
+    if 'estado_caza' not in oferta_columns:
+        db.session.execute(text("ALTER TABLE ofertas ADD COLUMN estado_caza VARCHAR(20) DEFAULT 'inactivo'"))
     # Clean orphan historico_precios records (oferta was deleted)
     db.session.execute(text('''
         DELETE FROM historico_precios

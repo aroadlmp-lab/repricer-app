@@ -6,6 +6,7 @@ const FILTERS = [
   { key: 'todas', label: 'Todas' },
   { key: 'activas', label: 'Activas' },
   { key: 'sin_buybox', label: 'Sin buybox' },
+  { key: 'cazando', label: 'Cazando' },
 ]
 
 export default function Ofertas({ selectedMp }) {
@@ -24,6 +25,7 @@ export default function Ofertas({ selectedMp }) {
   const filtered = sorted.filter(o => {
     if (filtro === 'activas' && !o.activo) return false
     if (filtro === 'sin_buybox' && o.tiene_buybox) return false
+    if (filtro === 'cazando' && o.estado_caza !== 'cazando') return false
     if (busqueda) {
       const q = busqueda.toLowerCase()
       const nombre = (o.producto?.nombre || '').toLowerCase()
