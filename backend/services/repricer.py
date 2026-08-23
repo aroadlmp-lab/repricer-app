@@ -4,6 +4,7 @@ from typing import Optional
 from extensions import db, decrypt_value
 from models import Marketplace, Oferta, HistoricoPrecios, Ejecucion
 from clients.mirakl import MiraklClient
+from services.locks import get_marketplace_lock
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,13 @@ def _execute_repricer(progress_callback=None):
         cambios = 0
         procesadas = 0
         errores_list = []
+
+        lock = get_marketplace_lock(mp.id)
+        if not lock.acquire(blocking=False):
+            logger.warning(f'REPRICER {mp.nombre}: saltado este ciclo, ya hay un sync/repricer en curso')
+            if progress_callback:
+                progress_callback({'type': 'skipped', 'marketplace': mp.nombre, 'reason': 'ya en curso'})
+            continue
 
         try:
             client = get_client(mp)
@@ -262,6 +270,8 @@ def _execute_repricer(progress_callback=None):
                 errores=str(e),
             ))
             db.session.commit()
+        finally:
+            lock.release()
 
 
 def _generar_motivo(oferta, bb_info, nuevo_precio):

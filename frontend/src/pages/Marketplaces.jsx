@@ -47,7 +47,8 @@ export default function Marketplaces({ onRefresh }) {
       const r = await api.post(`/marketplaces/${id}/sync`)
       setSyncResult(prev => ({ ...prev, [id]: r.data }))
     } catch (e) {
-      setSyncResult(prev => ({ ...prev, [id]: { status: 'error', message: 'Error de conexion' } }))
+      const message = e.response?.data?.message || 'Error de conexion'
+      setSyncResult(prev => ({ ...prev, [id]: { status: 'error', message } }))
     }
     setSyncing(prev => ({ ...prev, [id]: false }))
   }

@@ -2,11 +2,24 @@ import logging
 from extensions import db
 from models import Marketplace, Producto, Oferta
 from services.repricer import get_client
+from services.locks import get_marketplace_lock, MarketplaceBusyError
 
 logger = logging.getLogger(__name__)
 
 
 def sync_marketplace(mp):
+    lock = get_marketplace_lock(mp.id)
+    if not lock.acquire(blocking=False):
+        raise MarketplaceBusyError(
+            f'Ya hay una sincronización o repricer en curso para {mp.nombre}, espera a que termine'
+        )
+    try:
+        return _sync_marketplace_locked(mp)
+    finally:
+        lock.release()
+
+
+def _sync_marketplace_locked(mp):
     client = get_client(mp)
     ofertas_api = client.get_offers()
 

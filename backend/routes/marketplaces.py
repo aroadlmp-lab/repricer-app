@@ -94,7 +94,11 @@ def raw_p11(id, product_id):
 def sincronizar(id):
     mp = Marketplace.query.get_or_404(id)
     from services.sync import sync_marketplace
-    result = sync_marketplace(mp)
+    from services.locks import MarketplaceBusyError
+    try:
+        result = sync_marketplace(mp)
+    except MarketplaceBusyError as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 409
     if result is None:
         return jsonify({'status': 'error', 'message': 'No se pudieron obtener ofertas de la API'}), 400
     return jsonify({'status': 'ok', **result})
